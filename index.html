@@ -518,8 +518,9 @@ function loadExistingIntoState(){
     .forEach(r=>{
       const k=`${p}|${ymdDash(r.date)}`;
       const wd=r.date.getDay();
+      const baseStore = r.l ? String(r.l) : defaultStore;
       if(wd===1||wd===2){
-        editState[k]={status:'OFF',start:'',end:'',storeId:''};
+        editState[k]={status:'OFF',start:'',end:'',storeId:baseStore};
         return;
       }
       let status=r.status||'All day in store';
@@ -528,8 +529,7 @@ function loadExistingIntoState(){
         const o=String(r.o),q=String(r.q||'00').padStart(2,'0'),rh=String(r.rh),t=String(r.t||'00').padStart(2,'0');
         start=`${pad(o)}:${q}`;end=`${pad(rh)}:${t}`;
       }
-      const storeId = NEEDS_TIME.has(status) ? (r.l ? String(r.l) : defaultStore) : '';
-      editState[k]={status,start,end,storeId};
+      editState[k]={status,start,end,storeId:baseStore};
     });
 }
 
@@ -552,7 +552,7 @@ function renderCalendar(){
     if(!editState[k]){
       const wd=dt.getDay();
       if(wd===1||wd===2){
-        editState[k]={status:'OFF',start:'',end:'',storeId:''};
+        editState[k]={status:'OFF',start:'',end:'',storeId:defaultStore};
       }else{
         const tm=defaultTime(p);
         editState[k]={status:'All day in store',start:tm.start,end:tm.end,storeId:defaultStore};
@@ -566,11 +566,11 @@ function renderCalendar(){
       <select data-act="status">${STATUS_OPTIONS.map(o=>{
         const lbl=o.v==='\uF8FF'?'(Apple Holiday)':o.v;
         return `<option value="${o.v}" ${o.v===st.status?'selected':''}>${lbl}</option>`}).join('')}</select>
-      ${showTime?`
       <select data-act="store" style="font-size:11px">
         <option value="">(無店)</option>
         ${tpl.stores.map(s=>`<option value="${s.id}" ${String(st.storeId||'')===s.id?'selected':''}>${s.id} ${s.name}</option>`).join('')}
       </select>
+      ${showTime?`
       <div class="times">
         <input type="time" value="${st.start}" data-act="start">–
         <input type="time" value="${st.end}" data-act="end">
@@ -588,7 +588,9 @@ function renderCalendar(){
         editState[k].start=tm.start;editState[k].end=tm.end;
         if(!editState[k].storeId) editState[k].storeId=defaultStore;
       }else{
-        editState[k].storeId='';
+        // 休假類也保留店號（不清空）
+        editState[k].start='';editState[k].end='';
+        if(!editState[k].storeId) editState[k].storeId=defaultStore;
       }
       renderCalendar();
     });
@@ -616,7 +618,7 @@ $('t2BulkStore').addEventListener('change',e=>{
   if(!sid){return}
   const p=$('t2Person').value,m=$('t2Month').value;
   Object.keys(editState).forEach(k=>{
-    if(k.startsWith(`${p}|${m}-`) && NEEDS_TIME.has(editState[k].status)){
+    if(k.startsWith(`${p}|${m}-`)){
       editState[k].storeId=sid;
     }
   });
@@ -634,7 +636,7 @@ $('t2BulkInStore').addEventListener('click',()=>{
       const dt=new Date(k.split('|')[1]);
       const wd=dt.getDay();
       if(wd===1||wd===2){
-        editState[k]={status:'OFF',start:'',end:'',storeId:''};
+        editState[k]={status:'OFF',start:'',end:'',storeId:defaultStore};
       }else{
         editState[k]={status:'All day in store',start:tm.start,end:tm.end,storeId:defaultStore};
       }
@@ -674,6 +676,7 @@ $('t2Export').addEventListener('click', async ()=>{
     const monthEnd   = new Date(yy, mm, 1);
 
     let modifiedCount = 0;
+    let firstRow = null;  // 該人該月第一列，給開檔時自動捲到
     ws.eachRow({includeEmpty:false}, (row, rNum)=>{
       if(rNum < 4) return; // header
       const nameVal = row.getCell(colName).value;
@@ -692,16 +695,14 @@ $('t2Export').addEventListener('click', async ()=>{
       const st = editState[key];
       if(!st) return;
 
+      if(firstRow === null) firstRow = rNum;
+
       // 寫入 N
       row.getCell(colN).value = st.status;
-      // L 欄（店號）：工作類才寫
-      if(NEEDS_TIME.has(st.status)){
-        if(st.storeId){
-          const idNum = Number(st.storeId);
-          row.getCell(colL).value = isNaN(idNum) ? st.storeId : idNum;
-        }else{
-          row.getCell(colL).value = null;
-        }
+      // L 欄（店號）：不論休假與否都寫，這樣店名 VLOOKUP 都會有值
+      if(st.storeId){
+        const idNum = Number(st.storeId);
+        row.getCell(colL).value = isNaN(idNum) ? st.storeId : idNum;
       }else{
         row.getCell(colL).value = null;
       }
@@ -729,6 +730,15 @@ $('t2Export').addEventListener('click', async ()=>{
 
     // 最安全：完全不動其他列，只改該人該月的格子
     // 產出檔 = 原檔 + 只有目標儲存格被改寫，其他 100% 不動
+    // 設定開檔時自動捲到目標列 + 選中第一格
+    if(firstRow){
+      ws.views = [{
+        state: 'normal',
+        topLeftCell: `A${Math.max(1, firstRow-1)}`,
+        activeCell: `A${firstRow}`,
+        showGridLines: true
+      }];
+    }
 
     const out = await wb.xlsx.writeBuffer();
     const blob = new Blob([out], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
