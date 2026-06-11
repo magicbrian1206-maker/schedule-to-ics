@@ -726,25 +726,8 @@ $('t2Export').addEventListener('click', async ()=>{
       return;
     }
 
-    // 不刪列、不動共享公式 → 100% 保留原檔格式
-    // 直接隱藏其他人 + 其他月份的列，讓打開檔案看到的就是該人該月
-    ws.eachRow({includeEmpty:false}, (row, rNum)=>{
-      if(rNum < 4) return;
-      const nv = row.getCell(colName).value;
-      if(!nv){ row.hidden = true; return; }
-      if(String(nv).trim() !== p){ row.hidden = true; return; }
-      const dv = row.getCell(colDate).value;
-      let date = null;
-      if(dv instanceof Date) date = dv;
-      else if(typeof dv === 'number') date = new Date(Math.round((dv-25569)*86400*1000));
-      else if(dv && dv.result instanceof Date) date = dv.result;
-      if(!date){ row.hidden = true; return; }
-      // 用 yyyy-mm 比對最穩
-      const ym = `${date.getFullYear()}-${pad(date.getMonth()+1)}`;
-      if(ym !== m){ row.hidden = true; return; }
-      // 是目標 → 確保可見
-      row.hidden = false;
-    });
+    // 最安全：完全不動其他列，只改該人該月的格子
+    // 產出檔 = 原檔 + 只有目標儲存格被改寫，其他 100% 不動
 
     const out = await wb.xlsx.writeBuffer();
     const blob = new Blob([out], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
