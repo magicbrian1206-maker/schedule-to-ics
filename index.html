@@ -390,6 +390,7 @@ function extractStores(wb){
     if(typeof id!=='number' && !/^\d+$/.test(String(id))) continue;
     stores.push({id:String(id),name});
   }
+  stores.sort((a,b)=>Number(a.id)-Number(b.id));
   return stores;
 }
 
