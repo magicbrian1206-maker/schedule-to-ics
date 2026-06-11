@@ -208,7 +208,8 @@ function renderStat(){
     <div>📊 共 <b>${events.length}</b> 筆</div>
     <div>👥 <b>${people.size}</b> 人</div>
     <div>📅 <b>${days.size}</b> 天</div>
-    <div>🗓️ ${dr}</div>`;
+    <div>🗓️ ${dr}</div>
+    <div style="margin-left:auto;color:#8a93a0;font-size:12px">ℹ️ 輸出時不會包含 OFF 公休</div>`;
 }
 
 $('search').addEventListener('input', render);
