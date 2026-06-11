@@ -81,6 +81,8 @@
       <div class="stat" id="stat"></div>
       <div class="toolbar">
         <input type="text" id="search" placeholder="搜尋人員或代碼…" style="flex:1;min-width:200px;background:#0f1216;border:1px solid var(--bd);color:#e8eaed;border-radius:8px;padding:8px 12px;font-size:13.5px" />
+        <select id="personSel" style="background:#0f1216;border:1px solid var(--bd);color:#e8eaed;border-radius:8px;padding:8px 10px;font-size:13.5px;min-width:160px"></select>
+        <button class="ghost" id="dlOne">⬇️ 下載這個人的 .ics</button>
       </div>
       <div id="view"></div>
     </div>
@@ -187,6 +189,10 @@ async function readFile(file){
     $('resultSec').hidden = false;
     $('reset').hidden = false;
     $('dl').hidden = false;
+    // 填入下拉選單
+    const sel = $('personSel');
+    const names = [...new Set(events.map(e=>e.name))].sort();
+    sel.innerHTML = names.map(n=>`<option value="${n}">${n} (${events.filter(e=>e.name===n).length})</option>`).join('');
     renderStat(); render();
   }catch(err){
     console.error(err);
@@ -231,11 +237,12 @@ function render(){
   $('view').innerHTML = `<div class="grid">${cards}</div>`;
 }
 
-function buildICS(){
+function buildICS(filterName){
+  const list = filterName ? events.filter(e=>e.name===filterName) : events;
   const stamp = (()=>{const d=new Date();return `${d.getUTCFullYear()}${pad(d.getUTCMonth()+1)}${pad(d.getUTCDate())}T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}${pad(d.getUTCSeconds())}Z`})();
   const L=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Schedule to ICS//EN','CALSCALE:GREGORIAN','METHOD:PUBLISH'];
   const EXPORT_SKIP = new Set(['OFF']);
-  events.forEach(e=>{
+  list.forEach(e=>{
     if(EXPORT_SKIP.has(e.status)) return;
     const ds=ymd(e.date), de=ymd(new Date(e.date.getTime()+86400000));
     const first=e.name.split(/\s+/)[0];
@@ -254,6 +261,13 @@ $('dl').addEventListener('click',()=>{
   const blob=new Blob([buildICS()],{type:'text/calendar;charset=utf-8'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
   a.download=`${fileName||'Schedule'}.ics`; a.click();
+});
+$('dlOne').addEventListener('click',()=>{
+  const name = $('personSel').value;
+  if(!name) return;
+  const blob=new Blob([buildICS(name)],{type:'text/calendar;charset=utf-8'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download=`${fileName||'Schedule'}-${name.split(/\s+/)[0]}.ics`; a.click();
 });
 $('reset').addEventListener('click',()=>{
   events=[]; $('dropSec').hidden=false; $('resultSec').hidden=true;
