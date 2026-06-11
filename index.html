@@ -131,6 +131,7 @@
         <select id="t2Person" style="min-width:180px"></select>
         <select id="t2Month" style="min-width:140px"></select>
         <button class="ghost" id="t2BulkInStore">全月設為 in store</button>
+        <select id="t2BulkStore" style="min-width:220px"><option value="">— 一鍵套用全月店號 —</option></select>
         <div style="flex:1"></div>
         <span class="sub" id="t2TplInfo"></span>
       </div>
@@ -496,6 +497,9 @@ function enterEditor(){
   $('t2Month').innerHTML=tpl.months.map(m=>{
     const [y,mm]=m.split('-');return `<option value="${m}">${y} 年 ${parseInt(mm)} 月</option>`
   }).join('');
+  // 填店號 bulk 選單
+  $('t2BulkStore').innerHTML='<option value="">— 一鍵套用全月店號 —</option>'+
+    tpl.stores.map(s=>`<option value="${s.id}">${s.id} ${s.name}</option>`).join('');
   // 載入該人該月既有資料當預設
   loadExistingIntoState();
   renderCalendar();
@@ -605,6 +609,18 @@ function statusClass(s){
 
 $('t2Person').addEventListener('change',()=>{loadExistingIntoState();renderCalendar()});
 $('t2Month').addEventListener('change',()=>{loadExistingIntoState();renderCalendar()});
+$('t2BulkStore').addEventListener('change',e=>{
+  const sid=e.target.value;
+  if(!sid){return}
+  const p=$('t2Person').value,m=$('t2Month').value;
+  Object.keys(editState).forEach(k=>{
+    if(k.startsWith(`${p}|${m}-`) && NEEDS_TIME.has(editState[k].status)){
+      editState[k].storeId=sid;
+    }
+  });
+  renderCalendar();
+  e.target.value=''; // reset 回提示文字
+});
 $('t2BulkInStore').addEventListener('click',()=>{
   const p=$('t2Person').value,m=$('t2Month').value;
   const tm=defaultTime(p);
