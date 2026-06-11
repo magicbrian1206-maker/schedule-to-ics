@@ -822,38 +822,14 @@ $('t2Export').addEventListener('click', async ()=>{
       });
     }
 
-    // 自動調整欄寬（依該人該月的內容寬度，文字不被截斷）
-    const lastCol = ws.actualColumnCount;
-    for(let c=1; c<=lastCol; c++){
-      let maxLen = 0;
-      // header (第 2 列)
-      const hv = ws.getRow(2).getCell(c).value;
-      if(hv) maxLen = Math.max(maxLen, String(hv).length);
-      // 該人該月那幾列
-      ws.eachRow({includeEmpty:false},(row,rNum)=>{
-        if(rNum < 4) return;
-        const nv = row.getCell(colName).value;
-        if(!nv || String(nv).trim() !== p) return;
-        const dv = row.getCell(colDate).value;
-        let dt2 = null;
-        if(dv instanceof Date) dt2 = dv;
-        else if(typeof dv === 'number') dt2 = new Date(Math.round((dv-25569)*86400*1000));
-        else if(dv && dv.result instanceof Date) dt2 = dv.result;
-        if(!dt2 || dt2 < monthStart || dt2 >= monthEnd) return;
-        const v = row.getCell(c).value;
-        if(v == null) return;
-        let s = '';
-        if(v instanceof Date) s = v.toLocaleDateString('en-US',{day:'numeric',month:'short'});
-        else if(typeof v === 'object' && v.result != null) s = String(v.result);
-        else s = String(v);
-        // 中文字寬度算 2
-        const len = [...s].reduce((a,ch)=>a+(/[\u4e00-\u9fff\uF8FF]/.test(ch)?2:1),0);
-        if(len > maxLen) maxLen = len;
-      });
-      const col = ws.getColumn(c);
-      // padding +2，最小 6，最大 28
-      col.width = Math.max(6, Math.min(28, maxLen + 2));
-    }
+    // 套用標準範本欄寬（與 FY26Q3 ASC Scheduling 2 一致；其他欄維持原檔預設）
+    const STD_WIDTH = {
+      C: 12.66, L: 10.83, M: 14.83, N: 15.16,
+      O: 6.33, P: 2.33, Q: 5.33, R: 6.66, S: 2.33, T: 7.0
+    };
+    Object.entries(STD_WIDTH).forEach(([col,w])=>{
+      ws.getColumn(col).width = w;
+    });
 
     const out = await wb.xlsx.writeBuffer();
     const blob = new Blob([out], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
