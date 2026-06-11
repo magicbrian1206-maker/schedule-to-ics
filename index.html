@@ -333,6 +333,8 @@ drop.addEventListener('drop',e=>{e.preventDefault();drop.classList.remove('hover
 /* ========== TAB 2：個人班表產生器 ========== */
 const TPL_KEY = 'schedule-template-v1';
 const EARLY_FIRST = new Set(['Vic','Brian','Vincent','Jessie','Daisy','Kristin']); // 12:00–21:00
+const ALLOWED_FIRST = new Set(['Brian','Adam','Kay','Vic','Haidee','Daisy','Elay','Emily','Jessie','Vincent','Kristin','Paty']);
+const NAME_ALIAS = {'Chou Meng Hua':'Haidee'}; // Excel 名 → 顯示用 First
 const STATUS_OPTIONS = [
   {v:'All day in store', g:'work'},
   {v:'AM - Meeting/Training, PM - in store', g:'meet'},
@@ -451,7 +453,15 @@ function enterEditor(){
   $('t2ResetTpl').hidden=false;
   $('t2info').textContent=`範本：${tpl.fileName} • ${tpl.people.length} 人 / ${tpl.months.length} 個月`;
   $('t2TplInfo').textContent=`${tpl.rows.length} 列資料`;
-  $('t2Person').innerHTML=tpl.people.map(p=>`<option>${p}</option>`).join('');
+  // 只保留指定的 12 位（依 First name 比對；Chou Meng Hua → Haidee）
+  const filteredPeople = tpl.people.filter(n=>{
+    const first = NAME_ALIAS[n] || n.split(/\s+/)[0];
+    return ALLOWED_FIRST.has(first);
+  });
+  $('t2Person').innerHTML=filteredPeople.map(p=>{
+    const first = NAME_ALIAS[p] || p.split(/\s+/)[0];
+    return `<option value="${p}">${first}（${p}）</option>`;
+  }).join('');
   $('t2Month').innerHTML=tpl.months.map(m=>{
     const [y,mm]=m.split('-');return `<option value="${m}">${y} 年 ${parseInt(mm)} 月</option>`
   }).join('');
@@ -466,6 +476,12 @@ function loadExistingIntoState(){
   tpl.rows.filter(r=>r.name===p && `${r.date.getFullYear()}-${pad(r.date.getMonth()+1)}`===m)
     .forEach(r=>{
       const k=`${p}|${ymdDash(r.date)}`;
+      // 週一/二一律預設 OFF（忽略範本既有資料）
+      const wd=r.date.getDay();
+      if(wd===1||wd===2){
+        editState[k]={status:'OFF',start:'',end:''};
+        return;
+      }
       let status=r.status||'All day in store';
       let start=dt.start,end=dt.end;
       if(r.o!=null && r.rh!=null){
