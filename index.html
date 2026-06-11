@@ -388,16 +388,23 @@ $('dl').addEventListener('click', async ()=>{
     const colName=base.col.name+1, colDate=base.col.date+1;
     const colL=12, colN=14, colO=15, colQ=17, colR_=18, colT=20;
 
-    // 收集其他檔的「人×日期」資料 → 在底檔對應列覆寫
-    // 規則：每個檔以該檔出現的「Eng Name」為主，覆寫該人的列
+    // 攤平 shared formula 避免 row 操作時 master 不見
+    ws.eachRow({includeEmpty:false}, row=>{
+      row.eachCell({includeEmpty:false}, cell=>{
+        if(cell.formula && cell.model && cell.model.shareType==='shared'){
+          cell.value={formula:cell.formula, result:cell.result};
+        }
+      });
+    });
+
+    // 收集其他檔的「已編輯人員」→ 在底檔對應列(同名+同日)覆寫 L/N/O/Q/R/T
+    // 因為每個人都是用同一個範本「篩選自己」編輯，row 位置完全一致
     for(let i=1; i<loadedFiles.length; i++){
       const src = loadedFiles[i];
-      // 解析來源檔的 cells（用 SheetJS 拿值就好，不需 ExcelJS）
       const srcWb = XLSX.read(src.buffer,{cellDates:true});
-      const srcWs = srcWb.Sheets[src.sheet];
-      const srcAoa = XLSX.utils.sheet_to_json(srcWs,{header:1,defval:null,raw:true});
+      const srcAoa = XLSX.utils.sheet_to_json(srcWb.Sheets[src.sheet],{header:1,defval:null,raw:true});
       const sc = src.col;
-      // 找出該檔「真正有填東西的人」(L 或 N 任一欄非空)
+      // 找該檔「真正有填東西的人」(L 或 N 任一欄非空)
       const editedPeople = new Set();
       for(let r=sc.headerRow+1;r<srcAoa.length;r++){
         const row=srcAoa[r]||[];
@@ -405,17 +412,15 @@ $('dl').addEventListener('click', async ()=>{
         if(!nm) continue;
         if(row[12]!=null || row[13]!=null || row[14]!=null) editedPeople.add(String(nm).trim());
       }
-      // 把這些人的所有列從來源檔複製到底檔
+      // 把這些人的所有列從來源檔覆寫到底檔（in-place，row 號一致）
       for(let r=sc.headerRow+1;r<srcAoa.length;r++){
         const row=srcAoa[r]||[];
         const nm=row[sc.name];
         if(!nm || !editedPeople.has(String(nm).trim())) continue;
         const date=excelDate(row[sc.date]);
         if(!date) continue;
-        // 在底檔找對應列（同名同日）
         const targetRow = findRow(ws, colName, colDate, String(nm).trim(), date);
         if(!targetRow) continue;
-        // 覆寫 L/N/O/Q/R/T
         const setOrNull=(c,v)=>{ targetRow.getCell(c).value = (v==null||v==='')?null:v; };
         setOrNull(colL, row[11]);
         setOrNull(colN, row[13]);
