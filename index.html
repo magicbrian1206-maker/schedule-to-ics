@@ -431,8 +431,19 @@ $('dl').addEventListener('click', async ()=>{
       }
     }
 
-    // 不動 dataValidation — 第一份檔當底，原檔的 N 欄下拉會自動保留
-    // (補回反而會跟原本 N1:N1048576 的 validation 衝突，導致 Excel 報「部分內容有問題」)
+    // 清掉所有 N 欄原有的 dataValidation（ExcelJS 載入時把整欄展開成數百萬個 cell 級驗證，會跟我們加的重疊）
+    if(ws.dataValidations && ws.dataValidations.model){
+      const keys=Object.keys(ws.dataValidations.model);
+      for(const k of keys){
+        if(/^N\d+$/.test(k)) delete ws.dataValidations.model[k];
+      }
+    }
+    // 重設一條乾淨的 N 欄下拉
+    const lastR2 = ws.actualRowCount;
+    ws.dataValidations.add(`N4:N${lastR2}`, {
+      type:'list', allowBlank:true,
+      formulae:['$Z$6:$Z$39']
+    });
 
     const out = await wb.xlsx.writeBuffer();
     const blob = new Blob([out],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
