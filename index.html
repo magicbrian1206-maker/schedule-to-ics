@@ -170,7 +170,7 @@ const LEAVE_INFO = {
   'CL':{cls:'O',label:'補休'}, 'NP':{cls:'O',label:'無薪假'}, 'OFF':{cls:'O',label:'公休'},
   'W/On Leave':{cls:'O',label:'上班/下午假'}, 'On Leave/W':{cls:'O',label:'上午假/下班'},
   'RPH':{cls:'RPH',label:'例休補休'},
-  '加班':{cls:'AL',label:'國定假日加班'},
+  '上班':{cls:'AL',label:'國定假日上班'},
   'PH1':{cls:'PH',label:'PH1'},'PH2':{cls:'PH',label:'PH2'},'PH3':{cls:'PH',label:'PH3'},
   'PH4':{cls:'PH',label:'PH4'},'PH5':{cls:'PH',label:'PH5'},'PH6':{cls:'PH',label:'PH6'},
   'PH7':{cls:'PH',label:'PH7'},'PH8':{cls:'PH',label:'PH8'},'PH9':{cls:'PH',label:'PH9'},
@@ -249,7 +249,7 @@ async function readFile(file){
     events = best.events;
     const phDays = new Set(events.filter(e=>/^PH\d+$/.test(e.status)).map(e=>ymdDash(e.date)));
     best.workRows.forEach(w=>{
-      if(phDays.has(ymdDash(w.date))) events.push({name:w.name,date:w.date,status:'加班'});
+      if(phDays.has(ymdDash(w.date))) events.push({name:w.name,date:w.date,status:'上班'});
     });
     events.sort((a,b)=>a.date-b.date||a.name.localeCompare(b.name));
     if(events.length===0){
@@ -662,7 +662,11 @@ $('t2ResetTpl').addEventListener('click',()=>{
 });
 
 /* ========== 產出休假 .ics（當頁當人 + 該月） ========== */
-const ICS_SKIP = new Set(['OFF','All day in store',
+// 不匯出的狀態：OFF、Meeting/Training（沒在公司）
+// 匯出規則：
+//   - 假別 (AL/SL/PH/RPH 等) → 標題用代碼，例如「Brian AL」
+//   - 週一/二被改成「All day in store」(原本預設 OFF) → 標題顯示「Brian 上班」
+const ICS_SKIP = new Set(['OFF',
   'AM - Meeting/Training, PM - in store',
   'AM - in store, PM - Meeting/Training',
   'All day Meeting/Training']);
@@ -670,14 +674,21 @@ $('t2ExportICS').addEventListener('click',()=>{
   const p=$('t2Person').value, m=$('t2Month').value;
   if(!p||!m) return;
   const first = NAME_ALIAS[p] || p.split(/\s+/)[0];
-  // 收集該人該月、status 屬於請假/PH/RPH 的事件
   const events = [];
   Object.keys(editState).forEach(k=>{
     if(!k.startsWith(`${p}|${m}-`)) return;
     const st = editState[k];
     if(!st || ICS_SKIP.has(st.status) || !st.status) return;
     const dateStr = k.split('|')[1];
-    events.push({date:new Date(dateStr), status:st.status});
+    const dt = new Date(dateStr);
+    const wd = dt.getDay(); // 0=日, 1=一, 2=二
+    // All day in store：只有週一/二（原本預設 OFF 卻改成上班）才匯出 → 顯示「上班」
+    if(st.status === 'All day in store'){
+      if(wd !== 1 && wd !== 2) return;
+      events.push({date:dt, status:'上班'});
+      return;
+    }
+    events.push({date:dt, status:st.status});
   });
   if(events.length===0){
     alert('該月沒有可匯出的休假/節日事件。');
