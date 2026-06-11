@@ -116,6 +116,7 @@
   </div>
   <div style="display:flex;gap:8px">
     <button class="ghost" id="t2ResetTpl" hidden>清除範本</button>
+    <button class="ghost" id="t2ExportICS" hidden>📅 產出休假 .ics</button>
     <button id="t2Export" hidden>⬇️ 產出 Excel</button>
   </div>
 </header>
@@ -486,6 +487,7 @@ function enterEditor(){
   $('t2DropSec').hidden=true;
   $('t2EditSec').hidden=false;
   $('t2Export').hidden=false;
+  $('t2ExportICS').hidden=false;
   $('t2ResetTpl').hidden=false;
   $('t2info').textContent=`範本：${tpl.fileName} • ${tpl.people.length} 人 / ${tpl.months.length} 個月`;
   $('t2TplInfo').textContent=`${tpl.rows.length} 列資料`;
@@ -652,8 +654,48 @@ $('t2ResetTpl').addEventListener('click',()=>{
   localStorage.removeItem(TPL_KEY);
   tpl=null;editState={};
   $('t2DropSec').hidden=false;$('t2EditSec').hidden=true;
-  $('t2Export').hidden=true;$('t2ResetTpl').hidden=true;
+  $('t2Export').hidden=true;$('t2ExportICS').hidden=true;$('t2ResetTpl').hidden=true;
   $('t2info').textContent='選人 → 選月份 → 點每天的狀態 → 產出單人 Excel';
+});
+
+/* ========== 產出休假 .ics（當頁當人 + 該月） ========== */
+const ICS_SKIP = new Set(['OFF','All day in store',
+  'AM - Meeting/Training, PM - in store',
+  'AM - in store, PM - Meeting/Training',
+  'All day Meeting/Training']);
+$('t2ExportICS').addEventListener('click',()=>{
+  const p=$('t2Person').value, m=$('t2Month').value;
+  if(!p||!m) return;
+  const first = NAME_ALIAS[p] || p.split(/\s+/)[0];
+  // 收集該人該月、status 屬於請假/PH/RPH 的事件
+  const events = [];
+  Object.keys(editState).forEach(k=>{
+    if(!k.startsWith(`${p}|${m}-`)) return;
+    const st = editState[k];
+    if(!st || ICS_SKIP.has(st.status) || !st.status) return;
+    const dateStr = k.split('|')[1];
+    events.push({date:new Date(dateStr), status:st.status});
+  });
+  if(events.length===0){
+    alert('該月沒有可匯出的休假/節日事件。');
+    return;
+  }
+  events.sort((a,b)=>a.date-b.date);
+  const stamp=(()=>{const d=new Date();return `${d.getUTCFullYear()}${pad(d.getUTCMonth()+1)}${pad(d.getUTCDate())}T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}${pad(d.getUTCSeconds())}Z`})();
+  const L=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Schedule to ICS//EN','CALSCALE:GREGORIAN','METHOD:PUBLISH'];
+  events.forEach(e=>{
+    const ds=ymd(e.date), de=ymd(new Date(e.date.getTime()+86400000));
+    const code=e.status==='\uF8FF'?'Apple':e.status;
+    L.push('BEGIN:VEVENT',
+      `UID:sch-${ds}-${first}-${code.replace(/\W/g,'')}@local`,
+      `DTSTAMP:${stamp}`,`DTSTART;VALUE=DATE:${ds}`,`DTEND;VALUE=DATE:${de}`,
+      `SUMMARY:${first} ${code}`,
+      'TRANSP:TRANSPARENT','END:VEVENT');
+  });
+  L.push('END:VCALENDAR');
+  const blob=new Blob([L.join('\r\n')],{type:'text/calendar;charset=utf-8'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download=`${first}-${m}-leave.ics`;a.click();
 });
 
 /* ========== 產出 Excel（單人，使用 ExcelJS 完整保留原檔格式/公式/底色） ========== */
