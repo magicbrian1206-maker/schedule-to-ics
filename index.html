@@ -788,12 +788,12 @@ $('t2Export').addEventListener('click', async ()=>{
     }
 
     // 補回 N 欄下拉清單 — ExcelJS 載入會丟失「範圍引用」型 dataValidation
-    // 直接重建，引用原檔的 Z6:Z39（清單來源）
+    // 引用原檔 Z6:Z39（清單來源），公式不能有 = 前綴
     const lastRow2 = ws.actualRowCount;
     for(let r=4; r<=lastRow2; r++){
       ws.getCell(`N${r}`).dataValidation = {
         type: 'list', allowBlank: true,
-        formulae: ['=$Z$6:$Z$39']
+        formulae: ['$Z$6:$Z$39']
       };
     }
     // O/Q/R/T 的下拉（字串清單型）ExcelJS 通常會保留，不再手動補
