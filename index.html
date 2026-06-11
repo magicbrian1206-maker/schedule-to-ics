@@ -357,12 +357,39 @@ const STATUS_OPTIONS = [
 const NEEDS_TIME = new Set(['All day in store','AM - Meeting/Training, PM - in store',
   'AM - in store, PM - Meeting/Training','All day Meeting/Training']);
 
-let tpl = null; // { workbookBuffer, sheetName, headerRow, colMap, rows: [{rowIdx,name,date,status,o,q,r,t}], people, months }
-let editState = {}; // key=`${person}|${YYYY-MM-DD}` => {status, start:'12:00', end:'21:00'}
+let tpl = null; // { workbookBuffer, sheetName, headerRow, colMap, rows, people, months, stores }
+let editState = {}; // key=`${person}|${YYYY-MM-DD}` => {status, start:'12:00', end:'21:00', storeId:''}
 
 function defaultTime(name){
   const first=String(name||'').split(/\s+/)[0];
   return EARLY_FIRST.has(first)?{start:'12:00',end:'21:00'}:{start:'12:30',end:'21:30'};
+}
+
+// 從 workbook 找「店面ID和名称查询」sheet 抓店列表
+function extractStores(wb){
+  const stores=[];
+  const candidates=['店面ID和名称查询','店面ID和名稱查詢','Stores'];
+  let lookupSheet=null;
+  for(const sn of wb.SheetNames){
+    if(candidates.some(c=>sn.includes(c.slice(0,6)))){lookupSheet=sn;break}
+  }
+  // fallback：找有兩欄的 sheet（第一欄數字、第二欄字串）
+  if(!lookupSheet){
+    for(const sn of wb.SheetNames){
+      if(sn===tpl?.sheet) continue;
+      const aoa=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:null,raw:true});
+      if(aoa.length>5 && aoa.slice(1,5).every(r=>r&&typeof r[0]==='number'&&r[1])){lookupSheet=sn;break}
+    }
+  }
+  if(!lookupSheet) return stores;
+  const aoa=XLSX.utils.sheet_to_json(wb.Sheets[lookupSheet],{header:1,defval:null,raw:true});
+  for(const r of aoa){
+    if(!r||!r[0]||!r[1]) continue;
+    const id=r[0],name=String(r[1]).trim();
+    if(typeof id!=='number' && !/^\d+$/.test(String(id))) continue;
+    stores.push({id:String(id),name});
+  }
+  return stores;
 }
 
 async function loadTemplate(file){
@@ -394,10 +421,12 @@ async function loadTemplate(file){
       // BOD/分/EOD/分 在 ASC 模板固定為 O/Q/R/T (idx 14,16,17,19)
       rows.push({rowIdx:i,name:String(name).trim(),date,
         status:r[pickCol.status]||'',
-        o:r[14], q:r[16], rh:r[17], t:r[19]});
+        o:r[14], q:r[16], rh:r[17], t:r[19], l:r[11]});
     }
     const people=[...new Set(rows.map(r=>r.name))].sort();
     const months=[...new Set(rows.map(r=>`${r.date.getFullYear()}-${pad(r.date.getMonth()+1)}`))].sort();
+    // 抓店清單：從「店面ID和名称查询」sheet
+    const stores = extractStores(wb);
     // 存到 LocalStorage
     const b64 = await blobToBase64(new Blob([buf]));
     localStorage.setItem(TPL_KEY, JSON.stringify({
@@ -405,7 +434,7 @@ async function loadTemplate(file){
       col:pickCol, fileName:file.name, savedAt:Date.now()
     }));
     tpl={buffer:buf, sheet:pickSheet, headerRow:pickCol.headerRow, col:pickCol,
-         rows, people, months, fileName:file.name};
+         rows, people, months, stores, fileName:file.name};
     enterEditor();
   }catch(err){
     console.error(err);
@@ -438,11 +467,12 @@ async function loadTemplateFromStorage(){
       const name=r[col.name],date=excelDate(r[col.date]);
       if(!name||!date) continue;
       rows.push({rowIdx:i,name:String(name).trim(),date,
-        status:r[col.status]||'',o:r[14],q:r[16],rh:r[17],t:r[19]});
+        status:r[col.status]||'',o:r[14],q:r[16],rh:r[17],t:r[19],l:r[11]});
     }
     const people=[...new Set(rows.map(r=>r.name))].sort();
     const months=[...new Set(rows.map(r=>`${r.date.getFullYear()}-${pad(r.date.getMonth()+1)}`))].sort();
-    tpl={buffer:buf,sheet:meta.sheet,headerRow:col.headerRow,col,rows,people,months,fileName:meta.fileName};
+    const stores=extractStores(wb);
+    tpl={buffer:buf,sheet:meta.sheet,headerRow:col.headerRow,col,rows,people,months,stores,fileName:meta.fileName};
     return true;
   }catch(e){console.error(e);localStorage.removeItem(TPL_KEY);return false}
 }
@@ -474,13 +504,16 @@ function enterEditor(){
 function loadExistingIntoState(){
   const p=$('t2Person').value, m=$('t2Month').value;
   const dt=defaultTime(p);
+  // 該人預設店：取該人在範本內出現過最頻繁的 storeId
+  const storeFreq={};
+  tpl.rows.filter(r=>r.name===p && r.l).forEach(r=>{storeFreq[r.l]=(storeFreq[r.l]||0)+1});
+  const defaultStore=Object.keys(storeFreq).sort((a,b)=>storeFreq[b]-storeFreq[a])[0]||'';
   tpl.rows.filter(r=>r.name===p && `${r.date.getFullYear()}-${pad(r.date.getMonth()+1)}`===m)
     .forEach(r=>{
       const k=`${p}|${ymdDash(r.date)}`;
-      // 週一/二一律預設 OFF（忽略範本既有資料）
       const wd=r.date.getDay();
       if(wd===1||wd===2){
-        editState[k]={status:'OFF',start:'',end:''};
+        editState[k]={status:'OFF',start:'',end:'',storeId:''};
         return;
       }
       let status=r.status||'All day in store';
@@ -489,13 +522,18 @@ function loadExistingIntoState(){
         const o=String(r.o),q=String(r.q||'00').padStart(2,'0'),rh=String(r.rh),t=String(r.t||'00').padStart(2,'0');
         start=`${pad(o)}:${q}`;end=`${pad(rh)}:${t}`;
       }
-      editState[k]={status,start,end};
+      const storeId = NEEDS_TIME.has(status) ? (r.l ? String(r.l) : defaultStore) : '';
+      editState[k]={status,start,end,storeId};
     });
 }
 
 function renderCalendar(){
   const p=$('t2Person').value, m=$('t2Month').value;
   if(!p||!m){$('t2Cal').innerHTML='';return}
+  // 取該人預設店
+  const storeFreq={};
+  tpl.rows.filter(r=>r.name===p && r.l).forEach(r=>{storeFreq[r.l]=(storeFreq[r.l]||0)+1});
+  const defaultStore=Object.keys(storeFreq).sort((a,b)=>storeFreq[b]-storeFreq[a])[0]||'';
   const [y,mm]=m.split('-').map(Number);
   const first=new Date(y,mm-1,1);
   const lastDate=new Date(y,mm,0).getDate();
@@ -508,20 +546,25 @@ function renderCalendar(){
     if(!editState[k]){
       const wd=dt.getDay();
       if(wd===1||wd===2){
-        editState[k]={status:'OFF',start:'',end:''};
+        editState[k]={status:'OFF',start:'',end:'',storeId:''};
       }else{
         const tm=defaultTime(p);
-        editState[k]={status:'All day in store',start:tm.start,end:tm.end};
+        editState[k]={status:'All day in store',start:tm.start,end:tm.end,storeId:defaultStore};
       }
     }
     const st=editState[k];
     const cls=statusClass(st.status);
+    const showTime = NEEDS_TIME.has(st.status);
     html+=`<div class="day s-${cls}" data-key="${k}">
       <div class="date">${d} (${wkCh[dt.getDay()]})</div>
       <select data-act="status">${STATUS_OPTIONS.map(o=>{
         const lbl=o.v==='\uF8FF'?'(Apple Holiday)':o.v;
         return `<option value="${o.v}" ${o.v===st.status?'selected':''}>${lbl}</option>`}).join('')}</select>
-      ${NEEDS_TIME.has(st.status)?`
+      ${showTime?`
+      <select data-act="store" style="font-size:11px">
+        <option value="">(無店)</option>
+        ${tpl.stores.map(s=>`<option value="${s.id}" ${String(st.storeId||'')===s.id?'selected':''}>${s.id} ${s.name}</option>`).join('')}
+      </select>
       <div class="times">
         <input type="time" value="${st.start}" data-act="start">–
         <input type="time" value="${st.end}" data-act="end">
@@ -534,17 +577,21 @@ function renderCalendar(){
     const k=box.dataset.key;
     box.querySelector('[data-act="status"]').addEventListener('change',e=>{
       editState[k].status=e.target.value;
-      // 切換時若是工作類，套用預設時段
       if(NEEDS_TIME.has(e.target.value)){
         const tm=defaultTime(p);
         editState[k].start=tm.start;editState[k].end=tm.end;
+        if(!editState[k].storeId) editState[k].storeId=defaultStore;
+      }else{
+        editState[k].storeId='';
       }
       renderCalendar();
     });
     const si=box.querySelector('[data-act="start"]');
     const ei=box.querySelector('[data-act="end"]');
+    const ss=box.querySelector('[data-act="store"]');
     if(si)si.addEventListener('change',e=>editState[k].start=e.target.value);
     if(ei)ei.addEventListener('change',e=>editState[k].end=e.target.value);
+    if(ss)ss.addEventListener('change',e=>editState[k].storeId=e.target.value);
   });
 }
 
@@ -561,14 +608,17 @@ $('t2Month').addEventListener('change',()=>{loadExistingIntoState();renderCalend
 $('t2BulkInStore').addEventListener('click',()=>{
   const p=$('t2Person').value,m=$('t2Month').value;
   const tm=defaultTime(p);
+  const storeFreq={};
+  tpl.rows.filter(r=>r.name===p && r.l).forEach(r=>{storeFreq[r.l]=(storeFreq[r.l]||0)+1});
+  const defaultStore=Object.keys(storeFreq).sort((a,b)=>storeFreq[b]-storeFreq[a])[0]||'';
   Object.keys(editState).forEach(k=>{
     if(k.startsWith(`${p}|${m}-`)){
       const dt=new Date(k.split('|')[1]);
       const wd=dt.getDay();
       if(wd===1||wd===2){
-        editState[k]={status:'OFF',start:'',end:''};
+        editState[k]={status:'OFF',start:'',end:'',storeId:''};
       }else{
-        editState[k]={status:'All day in store',start:tm.start,end:tm.end};
+        editState[k]={status:'All day in store',start:tm.start,end:tm.end,storeId:defaultStore};
       }
     }
   });
@@ -598,7 +648,7 @@ $('t2Export').addEventListener('click', async ()=>{
 
     const colName = tpl.col.name + 1;   // ExcelJS 是 1-based
     const colDate = tpl.col.date + 1;
-    const colN = 14, colO = 15, colQ = 17, colR_ = 18, colT = 20;
+    const colL = 12, colN = 14, colO = 15, colQ = 17, colR_ = 18, colT = 20;
 
     // 該月起訖
     const [yy,mm] = m.split('-').map(Number);
@@ -626,6 +676,17 @@ $('t2Export').addEventListener('click', async ()=>{
 
       // 寫入 N
       row.getCell(colN).value = st.status;
+      // L 欄（店號）：工作類才寫
+      if(NEEDS_TIME.has(st.status)){
+        if(st.storeId){
+          const idNum = Number(st.storeId);
+          row.getCell(colL).value = isNaN(idNum) ? st.storeId : idNum;
+        }else{
+          row.getCell(colL).value = null;
+        }
+      }else{
+        row.getCell(colL).value = null;
+      }
       // 工作類 → 寫時段；其他 → 清空
       if(NEEDS_TIME.has(st.status)){
         const [oH,qM] = st.start.split(':');
