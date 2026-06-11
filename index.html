@@ -431,19 +431,22 @@ $('dl').addEventListener('click', async ()=>{
       }
     }
 
-    // 清掉所有 N 欄原有的 dataValidation（ExcelJS 載入時把整欄展開成數百萬個 cell 級驗證，會跟我們加的重疊）
+    // 清掉所有資料區欄位的 cell 級 dataValidation（ExcelJS 載入時把整欄展開成數百萬 cell，輸出時拆成重疊段）
     if(ws.dataValidations && ws.dataValidations.model){
       const keys=Object.keys(ws.dataValidations.model);
       for(const k of keys){
-        if(/^N\d+$/.test(k)) delete ws.dataValidations.model[k];
+        // N/O/Q/R/T/V 都有原始 validation
+        if(/^[NOQRTV]\d+$/.test(k)) delete ws.dataValidations.model[k];
       }
     }
-    // 重設一條乾淨的 N 欄下拉
+    // 重設乾淨的整欄 dataValidation
     const lastR2 = ws.actualRowCount;
-    ws.dataValidations.add(`N4:N${lastR2}`, {
-      type:'list', allowBlank:true,
-      formulae:['$Z$6:$Z$39']
-    });
+    ws.dataValidations.add(`N4:N${lastR2}`, {type:'list', allowBlank:true, formulae:['$Z$6:$Z$39']});
+    ws.dataValidations.add(`O4:O${lastR2}`, {type:'list', allowBlank:true, formulae:['"1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24"']});
+    ws.dataValidations.add(`R4:R${lastR2}`, {type:'list', allowBlank:true, formulae:['"1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24"']});
+    ws.dataValidations.add(`Q4:Q${lastR2}`, {type:'list', allowBlank:true, formulae:['"00,30"']});
+    ws.dataValidations.add(`T4:T${lastR2}`, {type:'list', allowBlank:true, formulae:['"00,30"']});
+    ws.dataValidations.add(`V4:V${lastR2}`, {type:'list', allowBlank:true, formulae:['"AM,PM"']});
 
     const out = await wb.xlsx.writeBuffer();
     const blob = new Blob([out],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
