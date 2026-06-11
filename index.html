@@ -740,6 +740,41 @@ $('t2Export').addEventListener('click', async ()=>{
       }];
     }
 
+    // 補回 N 欄下拉清單（資料驗證）— ExcelJS 載入/寫出會丟失原本的 dataValidation
+    const STATUS_LIST = [
+      'All day in store',
+      'AM - Meeting/Training, PM - in store',
+      'AM - in store, PM - Meeting/Training',
+      'All day Meeting/Training',
+      'OFF',
+      'AL','SL','M','MT','PT','B','BT','CL','NP','RPH',
+      'W/On Leave','On Leave/W',
+      'PH1','PH2','PH3','PH4','PH5','PH6','PH7','PH8',
+      'PH9','PH10','PH11','PH12','PH13','PH14','PH15','PH16',
+      '\uF8FF'
+    ];
+    const lastRow2 = ws.actualRowCount;
+    for(let r=4; r<=lastRow2; r++){
+      ws.getCell(`N${r}`).dataValidation = {
+        type: 'list', allowBlank: true,
+        formulae: [`"${STATUS_LIST.join(',').replace(/"/g,'""')}"`]
+      };
+    }
+    // O/R 欄（時）下拉 1–24；Q/T 欄（分）下拉 00/30
+    for(let r=4; r<=lastRow2; r++){
+      ['O','R'].forEach(c=>{
+        ws.getCell(`${c}${r}`).dataValidation = {
+          type:'list',allowBlank:true,
+          formulae:[`"${Array.from({length:24},(_,i)=>i+1).join(',')}"`]
+        };
+      });
+      ['Q','T'].forEach(c=>{
+        ws.getCell(`${c}${r}`).dataValidation = {
+          type:'list',allowBlank:true,formulae:['"00,30"']
+        };
+      });
+    }
+
     const out = await wb.xlsx.writeBuffer();
     const blob = new Blob([out], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
     const a = document.createElement('a');
