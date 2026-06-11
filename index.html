@@ -426,14 +426,8 @@ $('dl').addEventListener('click', async ()=>{
       }
     }
 
-    // 補回 N 欄下拉
-    const lastRow2 = ws.actualRowCount;
-    for(let r=4; r<=lastRow2; r++){
-      ws.getCell(`N${r}`).dataValidation = {
-        type:'list', allowBlank:true,
-        formulae:['$Z$6:$Z$39']
-      };
-    }
+    // 不動 dataValidation — 第一份檔當底，原檔的 N 欄下拉會自動保留
+    // (補回反而會跟原本 N1:N1048576 的 validation 衝突，導致 Excel 報「部分內容有問題」)
 
     const out = await wb.xlsx.writeBuffer();
     const blob = new Blob([out],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
