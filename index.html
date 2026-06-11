@@ -85,6 +85,7 @@
     <div class="sub" id="fileinfo">拖入多份 ASC 班表 → 預覽休假 + 產出整合版 Excel</div>
   </div>
   <div style="display:flex;gap:8px">
+    <button class="ghost" id="addMore" hidden>＋ 繼續加檔</button>
     <button class="ghost" id="reset" hidden>重新上傳</button>
     <button id="dl" hidden>⬇️ 產出整合 Excel</button>
   </div>
@@ -249,60 +250,93 @@ async function parseFile(file){
 async function readFiles(fileList){
   const files = Array.from(fileList);
   if(files.length===0) return;
-  $('fileinfo').innerHTML = `<span class="spinner"></span>解析 ${files.length} 個檔案中…`;
+  // 去重：同檔名 + 同 size 視為重複
+  const existing = new Set(loadedFiles.map(f=>`${f.name}|${f.size}`));
+  const newFiles = files.filter(f=>!existing.has(`${f.name}|${f.size}`));
+  const dupCount = files.length - newFiles.length;
+  if(newFiles.length===0){
+    $('fileinfo').textContent = `這 ${files.length} 個檔都已經載入過了`;
+    return;
+  }
+  $('fileinfo').innerHTML = `<span class="spinner"></span>解析 ${newFiles.length} 個新檔${dupCount?`(跳過 ${dupCount} 個重複)`:''}…`;
   $('drop').classList.add('loading');
   await new Promise(r=>setTimeout(r,30));
   try{
-    const allEvents = [];
-    const allWorkRows = [];
-    for(const f of files){
+    for(const f of newFiles){
       const parsed = await parseFile(f);
       loadedFiles.push({
-        name:f.name, buffer:parsed.buffer, sheet:parsed.sheet,
-        col:parsed.col, eventsCount:parsed.events.length
+        name:f.name, size:f.size, buffer:parsed.buffer, sheet:parsed.sheet,
+        col:parsed.col, eventsCount:parsed.events.length,
+        rawEvents:parsed.events, rawWorkRows:parsed.workRows
       });
-      allEvents.push(...parsed.events);
-      allWorkRows.push(...parsed.workRows);
     }
-    // 加班規則(全域)：當天有人 PH → 其他 in store → 上班
-    const phDays = new Set(allEvents.filter(e=>/^PH\d+$/.test(e.status)).map(e=>ymdDash(e.date)));
-    allWorkRows.forEach(w=>{
-      if(phDays.has(ymdDash(w.date))){
-        allEvents.push({name:w.name,date:w.date,status:'上班'});
-      }
-    });
-    // 去重：同 name+date+status 只留一筆
-    const seen = new Set();
-    events = allEvents.filter(e=>{
-      const k=`${e.name}|${ymdDash(e.date)}|${e.status}`;
-      if(seen.has(k)) return false;
-      seen.add(k); return true;
-    }).sort((a,b)=>a.date-b.date||a.name.localeCompare(b.name));
-
+    // 重新計算所有事件
+    recomputeEvents();
     if(events.length===0){
       $('fileinfo').textContent=`找不到任何假別資料`;
       return;
     }
     $('fileinfo').textContent=`已載入 ${loadedFiles.length} 檔 • ${events.length} 筆事件`;
     $('dropSec').hidden=true;$('resultSec').hidden=false;
-    $('reset').hidden=false;$('dl').hidden=false;
+    $('reset').hidden=false;$('dl').hidden=false;$('addMore').hidden=false;
     renderStat();render();
   }catch(err){
     console.error(err);$('fileinfo').textContent=`❌ ${err.message}`;
   }finally{$('drop').classList.remove('loading')}
 }
 
+function recomputeEvents(){
+  const allEvents = [];
+  const allWorkRows = [];
+  loadedFiles.forEach(f=>{
+    allEvents.push(...f.rawEvents);
+    allWorkRows.push(...f.rawWorkRows);
+  });
+  const phDays = new Set(allEvents.filter(e=>/^PH\d+$/.test(e.status)).map(e=>ymdDash(e.date)));
+  allWorkRows.forEach(w=>{
+    if(phDays.has(ymdDash(w.date))){
+      allEvents.push({name:w.name,date:w.date,status:'上班'});
+    }
+  });
+  const seen = new Set();
+  events = allEvents.filter(e=>{
+    const k=`${e.name}|${ymdDash(e.date)}|${e.status}`;
+    if(seen.has(k)) return false;
+    seen.add(k); return true;
+  }).sort((a,b)=>a.date-b.date||a.name.localeCompare(b.name));
+}
+
 function renderStat(){
   const days=new Set(events.map(e=>ymdDash(e.date)));
   const people=new Set(events.map(e=>e.name));
   const dr=events.length?`${ymdDash(events[0].date)} ~ ${ymdDash(events[events.length-1].date)}`:'-';
+  const fileChips = loadedFiles.map((f,i)=>
+    `<span style="background:#1a2532;border:1px solid var(--bd);border-radius:6px;padding:2px 8px;font-size:11.5px;display:inline-flex;align-items:center;gap:4px">📄 ${f.name} <span style="opacity:.6">(${f.eventsCount})</span> <a data-rm="${i}" style="color:#ff6b6b;cursor:pointer;margin-left:2px">×</a></span>`
+  ).join(' ');
   $('stat').innerHTML=`
-    <div>📁 <b>${loadedFiles.length}</b> 檔</div>
-    <div>📊 共 <b>${events.length}</b> 筆</div>
-    <div>👥 <b>${people.size}</b> 人</div>
-    <div>📅 <b>${days.size}</b> 天</div>
-    <div>🗓️ ${dr}</div>
-    <div style="margin-left:auto;color:#8a93a0;font-size:12px">ℹ️ 連假≥4天標紅</div>`;
+    <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;width:100%">
+      <div>📁 <b>${loadedFiles.length}</b> 檔</div>
+      <div>📊 <b>${events.length}</b> 筆</div>
+      <div>👥 <b>${people.size}</b> 人</div>
+      <div>📅 <b>${days.size}</b> 天</div>
+      <div>🗓️ ${dr}</div>
+      <div style="margin-left:auto;color:#8a93a0;font-size:12px">ℹ️ 連假≥4天標紅</div>
+    </div>
+    <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">${fileChips}</div>`;
+  // bind 刪除單檔
+  $('stat').querySelectorAll('[data-rm]').forEach(a=>{
+    a.addEventListener('click',e=>{
+      const idx = +e.target.dataset.rm;
+      loadedFiles.splice(idx,1);
+      if(loadedFiles.length===0){
+        $('reset').click();
+      }else{
+        recomputeEvents();
+        renderStat();render();
+        $('fileinfo').textContent=`已載入 ${loadedFiles.length} 檔 • ${events.length} 筆事件`;
+      }
+    });
+  });
 }
 
 $('search').addEventListener('input',render);
@@ -436,13 +470,19 @@ function findRow(ws, colName, colDate, name, date){
 $('reset').addEventListener('click',()=>{
   events=[]; loadedFiles=[];
   $('dropSec').hidden=false; $('resultSec').hidden=true;
-  $('reset').hidden=true; $('dl').hidden=true;
+  $('reset').hidden=true; $('dl').hidden=true; $('addMore').hidden=true;
   $('fileinfo').textContent='拖入多份 ASC 班表 → 預覽休假 + 產出整合版 Excel';
   $('file').value='';
 });
+$('addMore').addEventListener('click',()=>$('file').click());
 const drop=$('drop'),fi=$('file');
 drop.addEventListener('click',()=>fi.click());
-fi.addEventListener('change',e=>{if(e.target.files.length)readFiles(e.target.files)});
+fi.addEventListener('change',e=>{if(e.target.files.length){readFiles(e.target.files);e.target.value=''}});
+// resultSec 也接受拖檔（繼續加檔）
+const resultSec=$('resultSec');
+['dragover','dragenter'].forEach(ev=>resultSec.addEventListener(ev,e=>{e.preventDefault();resultSec.style.outline='2px dashed var(--accent)'}));
+['dragleave','drop'].forEach(ev=>resultSec.addEventListener(ev,e=>{e.preventDefault();resultSec.style.outline=''}));
+resultSec.addEventListener('drop',e=>{e.preventDefault();resultSec.style.outline='';if(e.dataTransfer.files.length)readFiles(e.dataTransfer.files)});
 ['dragover','dragenter'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('hover')}));
 ['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('hover')}));
 drop.addEventListener('drop',e=>{e.preventDefault();drop.classList.remove('hover');if(e.dataTransfer.files.length)readFiles(e.dataTransfer.files)});
