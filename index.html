@@ -729,6 +729,18 @@ $('t2Export').addEventListener('click', async ()=>{
     // 刪除非目標人員的列（從後往前刪，避免 index 跑掉）
     // ExcelJS 的 spliceRows 會自動調整所有公式中的 row 引用
     const lastRow = ws.actualRowCount;
+
+    // 先把所有 shared formula 攤平成獨立 formula，避免刪列後 clone 找不到 master
+    ws.eachRow({includeEmpty:false}, row=>{
+      row.eachCell({includeEmpty:false}, cell=>{
+        if(cell.formula && cell.model && cell.model.shareType==='shared'){
+          const f=cell.formula;
+          const result=cell.result;
+          cell.value={formula:f, result:result};
+        }
+      });
+    });
+
     const rowsToDelete = [];
     for(let r = 4; r <= lastRow; r++){
       const nv = ws.getRow(r).getCell(colName).value;
