@@ -787,28 +787,16 @@ $('t2Export').addEventListener('click', async ()=>{
       }];
     }
 
-    // 補回 N 欄下拉清單 — 用引用 Z 欄(原檔的清單來源)，避免逗號被當分隔符
+    // 補回 N 欄下拉清單 — ExcelJS 載入會丟失「範圍引用」型 dataValidation
+    // 直接重建，引用原檔的 Z6:Z39（清單來源）
     const lastRow2 = ws.actualRowCount;
     for(let r=4; r<=lastRow2; r++){
       ws.getCell(`N${r}`).dataValidation = {
         type: 'list', allowBlank: true,
-        formulae: ['=$Z$6:$Z$39']  // 直接引用 Z 欄範圍
+        formulae: ['=$Z$6:$Z$39']
       };
     }
-    // O/R 欄（時）下拉 1–24；Q/T 欄（分）下拉 00/30
-    for(let r=4; r<=lastRow2; r++){
-      ['O','R'].forEach(c=>{
-        ws.getCell(`${c}${r}`).dataValidation = {
-          type:'list',allowBlank:true,
-          formulae:[`"${Array.from({length:24},(_,i)=>i+1).join(',')}"`]
-        };
-      });
-      ['Q','T'].forEach(c=>{
-        ws.getCell(`${c}${r}`).dataValidation = {
-          type:'list',allowBlank:true,formulae:['"00,30"']
-        };
-      });
-    }
+    // O/Q/R/T 的下拉（字串清單型）ExcelJS 通常會保留，不再手動補
 
     // 欄寬：維持範本原檔（不覆寫）— 範本本來就是正確規格
 
