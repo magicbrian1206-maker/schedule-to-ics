@@ -35,6 +35,9 @@
   .stat{display:flex;gap:14px;flex-wrap:wrap;color:var(--mute);font-size:13px;margin-bottom:10px}
   .stat b{color:#fff}
   .empty{color:var(--mute);text-align:center;padding:30px}
+  .spinner{display:inline-block;width:14px;height:14px;border:2px solid #2c313a;border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;vertical-align:-2px;margin-right:6px}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .drop.loading{pointer-events:none;opacity:.7}
   .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px}
   .pcard{background:#1a1e25;border:1px solid var(--bd);border-radius:8px;padding:10px}
   .pcard h3{margin:0 0 6px;font-size:14px}
@@ -140,7 +143,10 @@ function detectColumns(aoa){
 
 async function readFile(file){
   fileName = file.name.replace(/\.xlsx?$/i,'');
-  $('fileinfo').textContent = `${file.name} • 解析中…`;
+  $('fileinfo').innerHTML = `<span class="spinner"></span>${file.name} • 解析中…`;
+  $('drop').classList.add('loading');
+  // 讓畫面先重繪 spinner，再進行重運算
+  await new Promise(r=>setTimeout(r,30));
   try{
     const buf = await file.arrayBuffer();
     const wb = XLSX.read(buf,{cellDates:true});
@@ -189,6 +195,8 @@ async function readFile(file){
   }catch(err){
     console.error(err);
     $('fileinfo').textContent = `❌ 解析失敗：${err.message}`;
+  }finally{
+    $('drop').classList.remove('loading');
   }
 }
 
