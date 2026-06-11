@@ -648,6 +648,27 @@ $('t2Export').addEventListener('click', async ()=>{
       return;
     }
 
+    // 刪除非目標人員的列（從後往前刪，避免 index 跑掉）
+    // ExcelJS 的 spliceRows 會自動調整所有公式中的 row 引用
+    const lastRow = ws.actualRowCount;
+    const rowsToDelete = [];
+    for(let r = 4; r <= lastRow; r++){
+      const nv = ws.getRow(r).getCell(colName).value;
+      if(!nv) continue;
+      if(String(nv).trim() !== p) rowsToDelete.push(r);
+    }
+    // 反向處理：把連續的列合併刪除
+    rowsToDelete.reverse();
+    let i = 0;
+    while(i < rowsToDelete.length){
+      const start = rowsToDelete[i];
+      let count = 1;
+      while(i+count < rowsToDelete.length && rowsToDelete[i+count] === start - count) count++;
+      // start 是大的（連續列的最後一列），實際刪除起點 = start - count + 1
+      ws.spliceRows(start - count + 1, count);
+      i += count;
+    }
+
     const out = await wb.xlsx.writeBuffer();
     const blob = new Blob([out], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
     const a = document.createElement('a');
