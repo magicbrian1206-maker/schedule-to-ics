@@ -3,53 +3,73 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>排班 → 行事曆轉換器</title>
-<meta name="description" content="把排班 Excel 一鍵轉成可匯入 Apple/Google 行事曆的 .ics 檔。資料只在瀏覽器處理，不上傳。" />
+<title>排班工具箱</title>
+<meta name="description" content="排班 Excel ↔ 行事曆/個人班表產生器，純前端，資料不離開瀏覽器。" />
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
   :root{--bg:#0b0d10;--card:#15181d;--mute:#8a93a0;--accent:#0a84ff;--bd:#262a31;
-        --al:#ff453a;--sl:#ff9f0a;--ph:#30d158;--rph:#5e5ce6;--other:#64d2ff}
+        --al:#ff453a;--sl:#ff9f0a;--ph:#30d158;--rph:#5e5ce6;--other:#64d2ff;--meet:#bf5af2}
   *{box-sizing:border-box}
   body{margin:0;font:15px/1.55 -apple-system,"Noto Sans TC",sans-serif;background:var(--bg);color:#e8eaed}
-  header{padding:22px 28px;border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
+  header{padding:18px 28px;border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
   h1{margin:0;font-size:19px}
   .sub{color:var(--mute);font-size:13px}
+  .tabs{display:flex;gap:0;border-bottom:1px solid var(--bd);background:var(--card)}
+  .tab{padding:14px 22px;cursor:pointer;color:var(--mute);font-weight:600;font-size:14px;border-bottom:2px solid transparent;transition:.15s}
+  .tab:hover{color:#cfd3d8}
+  .tab.on{color:#fff;border-bottom-color:var(--accent)}
   main{max-width:1200px;margin:0 auto;padding:24px 20px;display:grid;gap:18px}
   .card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:18px}
   .drop{border:2px dashed #2c313a;border-radius:12px;padding:48px;text-align:center;cursor:pointer;transition:.15s}
   .drop:hover,.drop.hover{border-color:var(--accent);background:#0d1419}
   .drop .ico{font-size:42px}
-  table{width:100%;border-collapse:collapse;font-size:13.5px}
-  th,td{padding:8px 10px;border-bottom:1px solid var(--bd);text-align:left;white-space:nowrap}
-  th{color:var(--mute);font-weight:600;background:#181c22;position:sticky;top:0}
-  tr:hover td{background:#1a1e25}
+  .drop.loading{pointer-events:none;opacity:.7}
   .pill{display:inline-block;padding:2px 9px;border-radius:6px;font-size:12px;font-weight:600;color:#0b0d10}
-  .pill.AL{background:var(--al);color:#fff}
-  .pill.SL{background:var(--sl)}
-  .pill.PH{background:var(--ph)}
-  .pill.RPH{background:var(--rph);color:#fff}
-  .pill.O{background:var(--other)}
+  .pill.AL{background:var(--al);color:#fff}.pill.SL{background:var(--sl)}
+  .pill.PH{background:var(--ph)}.pill.RPH{background:var(--rph);color:#fff}
+  .pill.O{background:var(--other)}.pill.MEET{background:var(--meet);color:#fff}
+  .pill.WORK{background:#3a3f48;color:#cfd3d8}
   button{background:var(--accent);color:#fff;border:0;border-radius:9px;padding:10px 18px;font-size:14px;font-weight:600;cursor:pointer}
   button.ghost{background:transparent;border:1px solid var(--bd);color:#e8eaed}
   button:disabled{opacity:.4;cursor:not-allowed}
+  select,input[type="text"],input[type="time"]{background:#0f1216;border:1px solid var(--bd);color:#e8eaed;border-radius:8px;padding:8px 10px;font-size:13.5px;font-family:inherit}
   .stat{display:flex;gap:14px;flex-wrap:wrap;color:var(--mute);font-size:13px;margin-bottom:10px}
   .stat b{color:#fff}
   .empty{color:var(--mute);text-align:center;padding:30px}
   .spinner{display:inline-block;width:14px;height:14px;border:2px solid #2c313a;border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;vertical-align:-2px;margin-right:6px}
   @keyframes spin{to{transform:rotate(360deg)}}
-  .drop.loading{pointer-events:none;opacity:.7}
   .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px}
   .pcard{background:#1a1e25;border:1px solid var(--bd);border-radius:8px;padding:10px}
   .pcard h3{margin:0 0 6px;font-size:14px}
   .pcard .row{font-size:12px;color:var(--mute);display:flex;justify-content:space-between;padding:2px 0}
   .toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
-  .help{font-size:12.5px;color:var(--mute);line-height:1.7}
-  .help code{background:#0f1216;border:1px solid var(--bd);padding:1px 6px;border-radius:4px;color:#cfd3d8}
   footer{text-align:center;color:var(--mute);font-size:12px;padding:24px 16px}
   footer a{color:var(--mute)}
+  /* 個人班表 grid */
+  .cal{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+  .cal .head{text-align:center;font-size:12px;color:var(--mute);padding:6px 0;font-weight:600}
+  .day{background:#1a1e25;border:1px solid var(--bd);border-radius:8px;padding:8px;min-height:96px;font-size:12px;display:flex;flex-direction:column;gap:4px}
+  .day.empty{background:transparent;border:1px dashed #2c313a}
+  .day .date{font-weight:600;color:#cfd3d8;font-size:13px}
+  .day select{width:100%;font-size:12px;padding:4px 6px}
+  .day .times{display:flex;gap:3px;align-items:center;font-size:11px;color:var(--mute)}
+  .day .times input{font-size:11px;padding:3px 4px;width:100%}
+  .day.s-leave{background:#3a1a1f}
+  .day.s-ph{background:#1a3a23}
+  .day.s-meet{background:#2d1b3a}
+  .day.s-rph{background:#1f1d3a}
+  .legend{font-size:11.5px;color:var(--mute);margin-top:8px;line-height:1.7}
 </style>
 </head>
 <body>
+
+<div class="tabs">
+  <div class="tab on" data-tab="t1">📅 行事曆轉換器</div>
+  <div class="tab" data-tab="t2">📝 個人班表產生器</div>
+</div>
+
+<!-- ============ TAB 1: ICS Converter ============ -->
+<section id="t1" class="tabpanel">
 <header>
   <div>
     <h1>📅 排班 → 行事曆轉換器</h1>
@@ -60,7 +80,6 @@
     <button id="dl" hidden>⬇️ 下載 .ics</button>
   </div>
 </header>
-
 <main>
   <section id="dropSec" class="card">
     <label class="drop" id="drop">
@@ -70,26 +89,71 @@
       <div class="sub">支援 .xlsx / .xls — 100% 在你瀏覽器處理，不會上傳</div>
     </label>
   </section>
-
   <section id="resultSec" hidden>
     <div class="card">
       <div class="stat" id="stat"></div>
       <div class="toolbar">
-        <input type="text" id="search" placeholder="搜尋人員或代碼…" style="flex:1;min-width:200px;background:#0f1216;border:1px solid var(--bd);color:#e8eaed;border-radius:8px;padding:8px 12px;font-size:13.5px" />
-        <select id="personSel" style="background:#0f1216;border:1px solid var(--bd);color:#e8eaed;border-radius:8px;padding:8px 10px;font-size:13.5px;min-width:160px"></select>
+        <input type="text" id="search" placeholder="搜尋人員或代碼…" style="flex:1;min-width:200px" />
+        <select id="personSel" style="min-width:160px"></select>
         <button class="ghost" id="dlOne">⬇️ 下載這個人的 .ics</button>
       </div>
       <div id="view"></div>
     </div>
   </section>
 </main>
+</section>
+
+<!-- ============ TAB 2: 個人班表產生器 ============ -->
+<section id="t2" class="tabpanel" hidden>
+<header>
+  <div>
+    <h1>📝 個人班表產生器</h1>
+    <div class="sub" id="t2info">選人 → 選月份 → 點每天的狀態 → 產出單人 Excel</div>
+  </div>
+  <div style="display:flex;gap:8px">
+    <button class="ghost" id="t2ResetTpl" hidden>清除範本</button>
+    <button id="t2Export" hidden>⬇️ 產出 Excel</button>
+  </div>
+</header>
+<main>
+  <section id="t2DropSec" class="card">
+    <label class="drop" id="t2Drop">
+      <input type="file" id="t2File" accept=".xlsx,.xls" hidden />
+      <div class="ico">📋</div>
+      <div style="margin:10px 0 4px;font-size:16px">第一次使用：拖一份空白班表範本進來</div>
+      <div class="sub">範本會記在你的瀏覽器，下次打開直接用 — 不會上傳</div>
+    </label>
+  </section>
+  <section id="t2EditSec" hidden>
+    <div class="card">
+      <div class="toolbar">
+        <select id="t2Person" style="min-width:180px"></select>
+        <select id="t2Month" style="min-width:140px"></select>
+        <button class="ghost" id="t2BulkInStore">全月設為 in store</button>
+        <div style="flex:1"></div>
+        <span class="sub" id="t2TplInfo"></span>
+      </div>
+      <div class="cal" id="t2Cal"></div>
+      <div class="legend">
+        <span class="pill WORK">In Store</span> 上班 ·
+        <span class="pill MEET">Meeting</span> 會議/訓練 ·
+        <span class="pill PH">PH</span> 國定假 ·
+        <span class="pill AL">AL/SL</span> 請假 ·
+        <span class="pill O">OFF</span> 公休／其他 ·
+        預設時段：Vic/Brian/Vincent/Jessie/Daisy/Kristin = 12:00–21:00；其他 = 12:30–21:30
+      </div>
+    </div>
+  </section>
+</main>
+</section>
 
 <footer>
   純前端工具 · 資料不離開你的瀏覽器 ·
-  <a href="https://github.com/" target="_blank" rel="noopener">原始碼</a>
+  <a href="https://github.com/magicbrian1206-maker/schedule-to-ics" target="_blank" rel="noopener">原始碼</a>
 </footer>
 
 <script>
+/* ========== 共用常數 ========== */
 const LEAVE_INFO = {
   'AL':{cls:'AL',label:'特休'}, 'SL':{cls:'SL',label:'病假'},
   'M':{cls:'O',label:'婚假'}, 'MT':{cls:'O',label:'產假'}, 'PT':{cls:'O',label:'陪產'},
@@ -109,7 +173,6 @@ const LEAVE_INFO = {
 const WORK_STATUS = new Set(['All day in store','AM - Meeting/Training, PM - in store',
   'AM - in store, PM - Meeting/Training','All day Meeting/Training']);
 
-let events = [], fileName = '';
 const $ = id => document.getElementById(id);
 const pad = n => String(n).padStart(2,'0');
 const ymd = d => `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}`;
@@ -123,88 +186,84 @@ function excelDate(v){
   return null;
 }
 
-// 自動找欄位 index（不依賴固定欄位順序）
+/* ========== Tab 切換 ========== */
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x===t));
+  document.querySelectorAll('.tabpanel').forEach(p=>p.hidden = (p.id !== t.dataset.tab));
+}));
+
+/* ========== TAB 1：ICS 轉換器 ========== */
+let events = [], fileName = '';
+
 function detectColumns(aoa){
-  // 在前 5 列裡找 header
   for(let r=0;r<Math.min(5,aoa.length);r++){
-    const row = aoa[r]||[];
-    const idx = {name:-1,date:-1,status:-1};
+    const row=aoa[r]||[];
+    const idx={name:-1,date:-1,status:-1};
     row.forEach((v,i)=>{
-      const s = String(v||'').toLowerCase().trim();
+      const s=String(v||'').toLowerCase().trim();
       if(idx.name<0 && (s==='eng name'||s==='name'||s==='姓名'||s==='員工'||s==='人員')) idx.name=i;
       if(idx.date<0 && (s==='date'||s==='日期')) idx.date=i;
       if(idx.status<0 && (s==='status'||s==='假別'||s==='狀態'||s==='請假')) idx.status=i;
     });
-    if(idx.name>=0 && idx.date>=0 && idx.status>=0) return {...idx, headerRow:r};
+    if(idx.name>=0&&idx.date>=0&&idx.status>=0) return {...idx,headerRow:r};
   }
-  // fallback：用原本 ASC 模板的固定欄位 (E=4, J=9, N=13)
-  return {name:4, date:9, status:13, headerRow:1};
+  return {name:4,date:9,status:13,headerRow:1};
 }
 
 async function readFile(file){
   fileName = file.name.replace(/\.xlsx?$/i,'');
   $('fileinfo').innerHTML = `<span class="spinner"></span>${file.name} • 解析中…`;
   $('drop').classList.add('loading');
-  // 讓畫面先重繪 spinner，再進行重運算
   await new Promise(r=>setTimeout(r,30));
   try{
     const buf = await file.arrayBuffer();
     const wb = XLSX.read(buf,{cellDates:true});
-    // 嘗試所有 sheet，挑出能讀出資料最多的那個
-    let best = {events:[], workRows:[], sheet:''};
+    let best = {events:[],workRows:[],sheet:''};
     for(const sn of wb.SheetNames){
       const aoa = XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:null,raw:true});
       const col = detectColumns(aoa);
-      const ev=[], work=[];
+      const ev=[],work=[];
       for(let i=col.headerRow+1;i<aoa.length;i++){
         const r=aoa[i]||[];
-        const name=r[col.name], date=excelDate(r[col.date]), st=r[col.status];
-        if(!name || !date || !st) continue;
-        const stT = String(st).trim();
-        if(stT === 'All day in store'){work.push({name:String(name).trim(),date,status:stT});continue}
+        const name=r[col.name],date=excelDate(r[col.date]),st=r[col.status];
+        if(!name||!date||!st) continue;
+        const stT=String(st).trim();
+        if(stT==='All day in store'){work.push({name:String(name).trim(),date,status:stT});continue}
         if(WORK_STATUS.has(stT)) continue;
         if(!LEAVE_INFO[stT]) continue;
         ev.push({name:String(name).trim(),date,status:stT});
       }
       if(ev.length+work.length > best.events.length+best.workRows.length){
-        best = {events:ev, workRows:work, sheet:sn};
+        best={events:ev,workRows:work,sheet:sn};
       }
     }
     events = best.events;
-    // 加班規則
     const phDays = new Set(events.filter(e=>/^PH\d+$/.test(e.status)).map(e=>ymdDash(e.date)));
     best.workRows.forEach(w=>{
       if(phDays.has(ymdDash(w.date))) events.push({name:w.name,date:w.date,status:'加班'});
     });
-    events.sort((a,b)=>a.date-b.date || a.name.localeCompare(b.name));
-
-    if(events.length === 0){
-      $('fileinfo').textContent = `${file.name} • 找不到任何假別資料，請確認 Excel 有 Eng Name / Date / Status 欄位`;
+    events.sort((a,b)=>a.date-b.date||a.name.localeCompare(b.name));
+    if(events.length===0){
+      $('fileinfo').textContent=`${file.name} • 找不到任何假別資料`;
       return;
     }
-    $('fileinfo').textContent = `${file.name} • 抓到 ${events.length} 筆（工作表：${best.sheet}）`;
-    $('dropSec').hidden = true;
-    $('resultSec').hidden = false;
-    $('reset').hidden = false;
-    $('dl').hidden = false;
-    // 填入下拉選單
-    const sel = $('personSel');
-    const names = [...new Set(events.map(e=>e.name))].sort();
-    sel.innerHTML = names.map(n=>`<option value="${n}">${n} (${events.filter(e=>e.name===n).length})</option>`).join('');
-    renderStat(); render();
+    $('fileinfo').textContent=`${file.name} • 抓到 ${events.length} 筆`;
+    $('dropSec').hidden=true;$('resultSec').hidden=false;
+    $('reset').hidden=false;$('dl').hidden=false;
+    const sel=$('personSel');
+    const names=[...new Set(events.map(e=>e.name))].sort();
+    sel.innerHTML=names.map(n=>`<option value="${n}">${n} (${events.filter(e=>e.name===n).length})</option>`).join('');
+    renderStat();render();
   }catch(err){
-    console.error(err);
-    $('fileinfo').textContent = `❌ 解析失敗：${err.message}`;
-  }finally{
-    $('drop').classList.remove('loading');
-  }
+    console.error(err);$('fileinfo').textContent=`❌ ${err.message}`;
+  }finally{$('drop').classList.remove('loading')}
 }
 
 function renderStat(){
-  const days = new Set(events.map(e=>ymdDash(e.date)));
-  const people = new Set(events.map(e=>e.name));
-  const dr = events.length ? `${ymdDash(events[0].date)} ~ ${ymdDash(events[events.length-1].date)}` : '-';
-  $('stat').innerHTML = `
+  const days=new Set(events.map(e=>ymdDash(e.date)));
+  const people=new Set(events.map(e=>e.name));
+  const dr=events.length?`${ymdDash(events[0].date)} ~ ${ymdDash(events[events.length-1].date)}`:'-';
+  $('stat').innerHTML=`
     <div>📊 共 <b>${events.length}</b> 筆</div>
     <div>👥 <b>${people.size}</b> 人</div>
     <div>📅 <b>${days.size}</b> 天</div>
@@ -212,77 +271,349 @@ function renderStat(){
     <div style="margin-left:auto;color:#8a93a0;font-size:12px">ℹ️ 輸出時不會包含 OFF 公休</div>`;
 }
 
-$('search').addEventListener('input', render);
-
+$('search').addEventListener('input',render);
 function render(){
-  const q = $('search').value.trim().toLowerCase();
-  const filtered = q ? events.filter(e=>
-    e.name.toLowerCase().includes(q) || e.status.toLowerCase().includes(q) ||
-    (LEAVE_INFO[e.status]?.label||'').includes(q)) : events;
-
-  if(filtered.length === 0){
-    $('view').innerHTML = `<div class="empty">${events.length? '沒有符合搜尋的結果' : '這份 Excel 沒有任何假別紀錄'}</div>`;
-    return;
-  }
-  const byP = {};
-  filtered.forEach(e=>{(byP[e.name]=byP[e.name]||[]).push(e)});
-  const cards = Object.keys(byP).sort().map(name=>{
-    const list = byP[name];
-    const inner = list.map(e=>{
-      const info = LEAVE_INFO[e.status]||{cls:'O',label:''};
-      const code = e.status==='\uF8FF'?'Apple':e.status;
+  const q=$('search').value.trim().toLowerCase();
+  const filtered=q?events.filter(e=>e.name.toLowerCase().includes(q)||e.status.toLowerCase().includes(q)||(LEAVE_INFO[e.status]?.label||'').includes(q)):events;
+  if(filtered.length===0){$('view').innerHTML=`<div class="empty">${events.length?'沒有符合搜尋的結果':'這份 Excel 沒有任何假別紀錄'}</div>`;return}
+  const byP={};filtered.forEach(e=>{(byP[e.name]=byP[e.name]||[]).push(e)});
+  const cards=Object.keys(byP).sort().map(name=>{
+    const list=byP[name];
+    const inner=list.map(e=>{
+      const info=LEAVE_INFO[e.status]||{cls:'O',label:''};
+      const code=e.status==='\uF8FF'?'Apple':e.status;
       return `<div class="row"><span>${ymdDash(e.date).slice(5)} (${wkCh[e.date.getDay()]})</span><span class="pill ${info.cls}" style="font-size:11px;padding:1px 6px">${code}</span></div>`;
     }).join('');
     return `<div class="pcard"><h3>${name} <span style="color:var(--mute);font-size:12px;font-weight:400">(${list.length})</span></h3>${inner}</div>`;
   }).join('');
-  $('view').innerHTML = `<div class="grid">${cards}</div>`;
+  $('view').innerHTML=`<div class="grid">${cards}</div>`;
 }
-
 function buildICS(filterName){
-  const list = filterName ? events.filter(e=>e.name===filterName) : events;
-  const stamp = (()=>{const d=new Date();return `${d.getUTCFullYear()}${pad(d.getUTCMonth()+1)}${pad(d.getUTCDate())}T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}${pad(d.getUTCSeconds())}Z`})();
+  const list=filterName?events.filter(e=>e.name===filterName):events;
+  const stamp=(()=>{const d=new Date();return `${d.getUTCFullYear()}${pad(d.getUTCMonth()+1)}${pad(d.getUTCDate())}T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}${pad(d.getUTCSeconds())}Z`})();
   const L=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Schedule to ICS//EN','CALSCALE:GREGORIAN','METHOD:PUBLISH'];
-  const EXPORT_SKIP = new Set(['OFF']);
+  const SKIP=new Set(['OFF']);
   list.forEach(e=>{
-    if(EXPORT_SKIP.has(e.status)) return;
-    const ds=ymd(e.date), de=ymd(new Date(e.date.getTime()+86400000));
+    if(SKIP.has(e.status)) return;
+    const ds=ymd(e.date),de=ymd(new Date(e.date.getTime()+86400000));
     const first=e.name.split(/\s+/)[0];
     const code=e.status==='\uF8FF'?'Apple':e.status;
-    L.push('BEGIN:VEVENT',
-      `UID:sch-${ds}-${first}-${code.replace(/\W/g,'')}@local`,
+    L.push('BEGIN:VEVENT',`UID:sch-${ds}-${first}-${code.replace(/\W/g,'')}@local`,
       `DTSTAMP:${stamp}`,`DTSTART;VALUE=DATE:${ds}`,`DTEND;VALUE=DATE:${de}`,
       `SUMMARY:${first} ${code}`,`DESCRIPTION:${e.name} • ${LEAVE_INFO[e.status]?.label||''}`,
       'TRANSP:TRANSPARENT','END:VEVENT');
   });
-  L.push('END:VCALENDAR');
-  return L.join('\r\n');
+  L.push('END:VCALENDAR');return L.join('\r\n');
 }
-
 $('dl').addEventListener('click',()=>{
   const blob=new Blob([buildICS()],{type:'text/calendar;charset=utf-8'});
-  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
-  a.download=`${fileName||'Schedule'}.ics`; a.click();
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download=`${fileName||'Schedule'}.ics`;a.click();
 });
 $('dlOne').addEventListener('click',()=>{
-  const name = $('personSel').value;
-  if(!name) return;
+  const name=$('personSel').value;if(!name)return;
   const blob=new Blob([buildICS(name)],{type:'text/calendar;charset=utf-8'});
-  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
-  a.download=`${fileName||'Schedule'}-${name.split(/\s+/)[0]}.ics`; a.click();
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download=`${fileName||'Schedule'}-${name.split(/\s+/)[0]}.ics`;a.click();
 });
 $('reset').addEventListener('click',()=>{
-  events=[]; $('dropSec').hidden=false; $('resultSec').hidden=true;
-  $('reset').hidden=true; $('dl').hidden=true;
+  events=[];$('dropSec').hidden=false;$('resultSec').hidden=true;
+  $('reset').hidden=true;$('dl').hidden=true;
   $('fileinfo').textContent='把 Excel 班表丟進來，自動轉成 Apple/Google 行事曆 (.ics)';
   $('file').value='';
 });
-
-const drop=$('drop'), fi=$('file');
+const drop=$('drop'),fi=$('file');
 drop.addEventListener('click',()=>fi.click());
-fi.addEventListener('change',e=>{if(e.target.files[0]) readFile(e.target.files[0])});
+fi.addEventListener('change',e=>{if(e.target.files[0])readFile(e.target.files[0])});
 ['dragover','dragenter'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('hover')}));
 ['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('hover')}));
 drop.addEventListener('drop',e=>{e.preventDefault();drop.classList.remove('hover');if(e.dataTransfer.files[0])readFile(e.dataTransfer.files[0])});
+
+
+/* ========== TAB 2：個人班表產生器 ========== */
+const TPL_KEY = 'schedule-template-v1';
+const EARLY_FIRST = new Set(['Vic','Brian','Vincent','Jessie','Daisy','Kristin']); // 12:00–21:00
+const STATUS_OPTIONS = [
+  {v:'All day in store', g:'work'},
+  {v:'AM - Meeting/Training, PM - in store', g:'meet'},
+  {v:'AM - in store, PM - Meeting/Training', g:'meet'},
+  {v:'All day Meeting/Training', g:'meet'},
+  {v:'OFF', g:'off'},
+  {v:'AL', g:'leave'},{v:'SL', g:'leave'},
+  {v:'M', g:'leave'},{v:'MT', g:'leave'},{v:'PT', g:'leave'},
+  {v:'B', g:'leave'},{v:'BT', g:'leave'},
+  {v:'CL', g:'leave'},{v:'NP', g:'leave'},
+  {v:'W/On Leave', g:'leave'},{v:'On Leave/W', g:'leave'},
+  {v:'RPH', g:'rph'},
+  {v:'PH1', g:'ph'},{v:'PH2', g:'ph'},{v:'PH3', g:'ph'},{v:'PH4', g:'ph'},
+  {v:'PH5', g:'ph'},{v:'PH6', g:'ph'},{v:'PH7', g:'ph'},{v:'PH8', g:'ph'},
+  {v:'PH9', g:'ph'},{v:'PH10', g:'ph'},{v:'PH11', g:'ph'},{v:'PH12', g:'ph'},
+  {v:'PH13', g:'ph'},{v:'PH14', g:'ph'},{v:'PH15', g:'ph'},{v:'PH16', g:'ph'},
+  {v:'\uF8FF', g:'ph'}
+];
+const NEEDS_TIME = new Set(['All day in store','AM - Meeting/Training, PM - in store',
+  'AM - in store, PM - Meeting/Training','All day Meeting/Training']);
+
+let tpl = null; // { workbookBuffer, sheetName, headerRow, colMap, rows: [{rowIdx,name,date,status,o,q,r,t}], people, months }
+let editState = {}; // key=`${person}|${YYYY-MM-DD}` => {status, start:'12:00', end:'21:00'}
+
+function defaultTime(name){
+  const first=String(name||'').split(/\s+/)[0];
+  return EARLY_FIRST.has(first)?{start:'12:00',end:'21:00'}:{start:'12:30',end:'21:30'};
+}
+
+async function loadTemplate(file){
+  $('t2info').innerHTML=`<span class="spinner"></span>讀取範本中…`;
+  $('t2Drop').classList.add('loading');
+  await new Promise(r=>setTimeout(r,30));
+  try{
+    const buf=await file.arrayBuffer();
+    const wb=XLSX.read(buf,{cellDates:true,cellStyles:true});
+    // 找出資料 sheet
+    let pickSheet=null,pickAoa=null,pickCol=null;
+    for(const sn of wb.SheetNames){
+      const aoa=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:null,raw:true});
+      const col=detectColumns(aoa);
+      let cnt=0;
+      for(let i=col.headerRow+1;i<aoa.length;i++){
+        const r=aoa[i]||[];
+        if(r[col.name]&&r[col.date]) cnt++;
+      }
+      if(cnt>(pickAoa?.dataCount||0)){pickSheet=sn;pickAoa=aoa;pickAoa.dataCount=cnt;pickCol=col}
+    }
+    if(!pickSheet){throw new Error('找不到包含 Eng Name / Date 的工作表')}
+    // 解析每一列
+    const rows=[];
+    for(let i=pickCol.headerRow+1;i<pickAoa.length;i++){
+      const r=pickAoa[i]||[];
+      const name=r[pickCol.name],date=excelDate(r[pickCol.date]);
+      if(!name||!date) continue;
+      // BOD/分/EOD/分 在 ASC 模板固定為 O/Q/R/T (idx 14,16,17,19)
+      rows.push({rowIdx:i,name:String(name).trim(),date,
+        status:r[pickCol.status]||'',
+        o:r[14], q:r[16], rh:r[17], t:r[19]});
+    }
+    const people=[...new Set(rows.map(r=>r.name))].sort();
+    const months=[...new Set(rows.map(r=>`${r.date.getFullYear()}-${pad(r.date.getMonth()+1)}`))].sort();
+    // 存到 LocalStorage
+    const b64 = await blobToBase64(new Blob([buf]));
+    localStorage.setItem(TPL_KEY, JSON.stringify({
+      b64, sheet:pickSheet, headerRow:pickCol.headerRow,
+      col:pickCol, fileName:file.name, savedAt:Date.now()
+    }));
+    tpl={buffer:buf, sheet:pickSheet, headerRow:pickCol.headerRow, col:pickCol,
+         rows, people, months, fileName:file.name};
+    enterEditor();
+  }catch(err){
+    console.error(err);
+    $('t2info').textContent=`❌ ${err.message}`;
+  }finally{$('t2Drop').classList.remove('loading')}
+}
+
+function blobToBase64(blob){
+  return new Promise((res,rej)=>{const r=new FileReader();
+    r.onload=()=>res(r.result.split(',')[1]);r.onerror=rej;r.readAsDataURL(blob)});
+}
+function base64ToBuffer(b64){
+  const bin=atob(b64);const u8=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++)u8[i]=bin.charCodeAt(i);return u8.buffer;
+}
+
+async function loadTemplateFromStorage(){
+  const raw=localStorage.getItem(TPL_KEY);
+  if(!raw) return false;
+  try{
+    const meta=JSON.parse(raw);
+    const buf=base64ToBuffer(meta.b64);
+    const wb=XLSX.read(buf,{cellDates:true});
+    const ws=wb.Sheets[meta.sheet];
+    const aoa=XLSX.utils.sheet_to_json(ws,{header:1,defval:null,raw:true});
+    const col=meta.col;
+    const rows=[];
+    for(let i=col.headerRow+1;i<aoa.length;i++){
+      const r=aoa[i]||[];
+      const name=r[col.name],date=excelDate(r[col.date]);
+      if(!name||!date) continue;
+      rows.push({rowIdx:i,name:String(name).trim(),date,
+        status:r[col.status]||'',o:r[14],q:r[16],rh:r[17],t:r[19]});
+    }
+    const people=[...new Set(rows.map(r=>r.name))].sort();
+    const months=[...new Set(rows.map(r=>`${r.date.getFullYear()}-${pad(r.date.getMonth()+1)}`))].sort();
+    tpl={buffer:buf,sheet:meta.sheet,headerRow:col.headerRow,col,rows,people,months,fileName:meta.fileName};
+    return true;
+  }catch(e){console.error(e);localStorage.removeItem(TPL_KEY);return false}
+}
+
+function enterEditor(){
+  $('t2DropSec').hidden=true;
+  $('t2EditSec').hidden=false;
+  $('t2Export').hidden=false;
+  $('t2ResetTpl').hidden=false;
+  $('t2info').textContent=`範本：${tpl.fileName} • ${tpl.people.length} 人 / ${tpl.months.length} 個月`;
+  $('t2TplInfo').textContent=`${tpl.rows.length} 列資料`;
+  $('t2Person').innerHTML=tpl.people.map(p=>`<option>${p}</option>`).join('');
+  $('t2Month').innerHTML=tpl.months.map(m=>{
+    const [y,mm]=m.split('-');return `<option value="${m}">${y} 年 ${parseInt(mm)} 月</option>`
+  }).join('');
+  // 載入該人該月既有資料當預設
+  loadExistingIntoState();
+  renderCalendar();
+}
+
+function loadExistingIntoState(){
+  const p=$('t2Person').value, m=$('t2Month').value;
+  const dt=defaultTime(p);
+  tpl.rows.filter(r=>r.name===p && `${r.date.getFullYear()}-${pad(r.date.getMonth()+1)}`===m)
+    .forEach(r=>{
+      const k=`${p}|${ymdDash(r.date)}`;
+      let status=r.status||'All day in store';
+      let start=dt.start,end=dt.end;
+      if(r.o!=null && r.rh!=null){
+        const o=String(r.o),q=String(r.q||'00').padStart(2,'0'),rh=String(r.rh),t=String(r.t||'00').padStart(2,'0');
+        start=`${pad(o)}:${q}`;end=`${pad(rh)}:${t}`;
+      }
+      editState[k]={status,start,end};
+    });
+}
+
+function renderCalendar(){
+  const p=$('t2Person').value, m=$('t2Month').value;
+  if(!p||!m){$('t2Cal').innerHTML='';return}
+  const [y,mm]=m.split('-').map(Number);
+  const first=new Date(y,mm-1,1);
+  const lastDate=new Date(y,mm,0).getDate();
+  const startWk=first.getDay();
+  let html=['日','一','二','三','四','五','六'].map(w=>`<div class="head">${w}</div>`).join('');
+  for(let i=0;i<startWk;i++) html+=`<div class="day empty"></div>`;
+  for(let d=1;d<=lastDate;d++){
+    const dt=new Date(y,mm-1,d);
+    const k=`${p}|${ymdDash(dt)}`;
+    if(!editState[k]){
+      const tm=defaultTime(p);
+      editState[k]={status:'All day in store',start:tm.start,end:tm.end};
+    }
+    const st=editState[k];
+    const cls=statusClass(st.status);
+    html+=`<div class="day s-${cls}" data-key="${k}">
+      <div class="date">${d} (${wkCh[dt.getDay()]})</div>
+      <select data-act="status">${STATUS_OPTIONS.map(o=>{
+        const lbl=o.v==='\uF8FF'?'(Apple Holiday)':o.v;
+        return `<option value="${o.v}" ${o.v===st.status?'selected':''}>${lbl}</option>`}).join('')}</select>
+      ${NEEDS_TIME.has(st.status)?`
+      <div class="times">
+        <input type="time" value="${st.start}" data-act="start">–
+        <input type="time" value="${st.end}" data-act="end">
+      </div>`:''}
+    </div>`;
+  }
+  $('t2Cal').innerHTML=html;
+  // bind
+  $('t2Cal').querySelectorAll('[data-key]').forEach(box=>{
+    const k=box.dataset.key;
+    box.querySelector('[data-act="status"]').addEventListener('change',e=>{
+      editState[k].status=e.target.value;
+      // 切換時若是工作類，套用預設時段
+      if(NEEDS_TIME.has(e.target.value)){
+        const tm=defaultTime(p);
+        editState[k].start=tm.start;editState[k].end=tm.end;
+      }
+      renderCalendar();
+    });
+    const si=box.querySelector('[data-act="start"]');
+    const ei=box.querySelector('[data-act="end"]');
+    if(si)si.addEventListener('change',e=>editState[k].start=e.target.value);
+    if(ei)ei.addEventListener('change',e=>editState[k].end=e.target.value);
+  });
+}
+
+function statusClass(s){
+  if(NEEDS_TIME.has(s)) return s==='All day in store'?'work':'meet';
+  if(s==='RPH') return 'rph';
+  if(/^PH/.test(s)||s==='\uF8FF') return 'ph';
+  if(['AL','SL','M','MT','PT','B','BT'].includes(s)) return 'leave';
+  return 'work';
+}
+
+$('t2Person').addEventListener('change',()=>{loadExistingIntoState();renderCalendar()});
+$('t2Month').addEventListener('change',()=>{loadExistingIntoState();renderCalendar()});
+$('t2BulkInStore').addEventListener('click',()=>{
+  const p=$('t2Person').value,m=$('t2Month').value;
+  const tm=defaultTime(p);
+  Object.keys(editState).forEach(k=>{
+    if(k.startsWith(`${p}|${m}-`)){
+      editState[k]={status:'All day in store',start:tm.start,end:tm.end};
+    }
+  });
+  renderCalendar();
+});
+
+$('t2ResetTpl').addEventListener('click',()=>{
+  if(!confirm('確定要清除已儲存的範本嗎？')) return;
+  localStorage.removeItem(TPL_KEY);
+  tpl=null;editState={};
+  $('t2DropSec').hidden=false;$('t2EditSec').hidden=true;
+  $('t2Export').hidden=true;$('t2ResetTpl').hidden=true;
+  $('t2info').textContent='選人 → 選月份 → 點每天的狀態 → 產出單人 Excel';
+});
+
+/* ========== 產出 Excel（單人） ========== */
+$('t2Export').addEventListener('click',()=>{
+  const p=$('t2Person').value,m=$('t2Month').value;
+  if(!p||!tpl) return;
+  // 用原 buffer 重新解析（保留所有公式格式）
+  const wb=XLSX.read(tpl.buffer,{cellDates:true,cellStyles:true,cellFormula:true});
+  // 保留模板所有 sheet（含 VLOOKUP 用的「店面ID和名称查询」），但工作表1 只留該人的列
+  const ws=wb.Sheets[tpl.sheet];
+  const aoa=XLSX.utils.sheet_to_json(ws,{header:1,defval:null,raw:false});
+  // 找出該人所有 row idx
+  const personRowIdxs=tpl.rows.filter(r=>r.name===p).map(r=>r.rowIdx);
+  // 將該月選定資料寫回對應列
+  const col=tpl.col;
+  // 重新 read raw aoa（含公式 _f）
+  const aoaRaw=XLSX.utils.sheet_to_json(ws,{header:1,defval:null,raw:true});
+  // 做修改：對 personRowIdxs 中、該月的列覆寫 N/O/Q/R/T；其他人/其他月不動
+  personRowIdxs.forEach(ri=>{
+    const r=aoaRaw[ri];if(!r)return;
+    const date=excelDate(r[col.date]);if(!date)return;
+    const key=`${p}|${ymdDash(date)}`;
+    const st=editState[key];
+    if(!st) return;
+    r[col.status]=st.status;
+    if(NEEDS_TIME.has(st.status)){
+      const [oH,qM]=st.start.split(':');
+      const [rH,tM]=st.end.split(':');
+      r[14]=parseInt(oH);r[16]=qM;r[17]=parseInt(rH);r[19]=tM;
+    }else{
+      r[14]=null;r[16]=null;r[17]=null;r[19]=null;
+    }
+  });
+  // 篩選：只保留該人 + header 三列
+  const keepRows=new Set([0,1,2]); // 模板前3列(空、header、副標)
+  personRowIdxs.forEach(ri=>keepRows.add(ri));
+  const filtered=aoaRaw.map((r,i)=>keepRows.has(i)?r:null).filter(r=>r!==null);
+  // 重建 sheet：用 aoa_to_sheet 但保留公式不容易，這裡直接用 utils
+  const newWs=XLSX.utils.aoa_to_sheet(filtered);
+  // 保留欄寬
+  if(ws['!cols']) newWs['!cols']=ws['!cols'];
+  wb.Sheets[tpl.sheet]=newWs;
+  // 輸出
+  const out=XLSX.write(wb,{type:'array',bookType:'xlsx',cellDates:true});
+  const blob=new Blob([out],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  const first=p.split(/\s+/)[0];
+  a.download=`Schedule-${first}-${m}.xlsx`;a.click();
+});
+
+/* drop binding */
+const t2drop=$('t2Drop'),t2fi=$('t2File');
+t2drop.addEventListener('click',()=>t2fi.click());
+t2fi.addEventListener('change',e=>{if(e.target.files[0])loadTemplate(e.target.files[0])});
+['dragover','dragenter'].forEach(ev=>t2drop.addEventListener(ev,e=>{e.preventDefault();t2drop.classList.add('hover')}));
+['dragleave','drop'].forEach(ev=>t2drop.addEventListener(ev,e=>{e.preventDefault();t2drop.classList.remove('hover')}));
+t2drop.addEventListener('drop',e=>{e.preventDefault();t2drop.classList.remove('hover');if(e.dataTransfer.files[0])loadTemplate(e.dataTransfer.files[0])});
+
+// 開頁時自動載入儲存範本
+loadTemplateFromStorage().then(ok=>{if(ok)enterEditor()});
 </script>
 </body>
 </html>
