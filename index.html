@@ -489,8 +489,13 @@ function renderCalendar(){
     const dt=new Date(y,mm-1,d);
     const k=`${p}|${ymdDash(dt)}`;
     if(!editState[k]){
-      const tm=defaultTime(p);
-      editState[k]={status:'All day in store',start:tm.start,end:tm.end};
+      const wd=dt.getDay();
+      if(wd===1||wd===2){
+        editState[k]={status:'OFF',start:'',end:''};
+      }else{
+        const tm=defaultTime(p);
+        editState[k]={status:'All day in store',start:tm.start,end:tm.end};
+      }
     }
     const st=editState[k];
     const cls=statusClass(st.status);
@@ -541,7 +546,13 @@ $('t2BulkInStore').addEventListener('click',()=>{
   const tm=defaultTime(p);
   Object.keys(editState).forEach(k=>{
     if(k.startsWith(`${p}|${m}-`)){
-      editState[k]={status:'All day in store',start:tm.start,end:tm.end};
+      const dt=new Date(k.split('|')[1]);
+      const wd=dt.getDay();
+      if(wd===1||wd===2){
+        editState[k]={status:'OFF',start:'',end:''};
+      }else{
+        editState[k]={status:'All day in store',start:tm.start,end:tm.end};
+      }
     }
   });
   renderCalendar();
