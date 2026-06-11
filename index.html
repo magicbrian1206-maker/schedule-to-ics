@@ -727,15 +727,7 @@ $('t2Export').addEventListener('click', async ()=>{
     }
 
     // 不刪列、不動共享公式 → 100% 保留原檔格式
-    // 改用 AutoFilter 預先過濾到該人 + 該月：打開檔案直接只看到目標資料
-    const lastRow = ws.actualRowCount;
-    const lastCol = ws.actualColumnCount;
-    // header 在第 2 列；篩選範圍從第 2 列到最後
-    ws.autoFilter = {
-      from: { row: 2, column: 1 },
-      to:   { row: lastRow, column: lastCol }
-    };
-    // 隱藏其他人 + 其他月份的列（打開 Excel 看起來就只剩該人該月）
+    // 直接隱藏其他人 + 其他月份的列，讓打開檔案看到的就是該人該月
     ws.eachRow({includeEmpty:false}, (row, rNum)=>{
       if(rNum < 4) return;
       const nv = row.getCell(colName).value;
@@ -746,7 +738,12 @@ $('t2Export').addEventListener('click', async ()=>{
       if(dv instanceof Date) date = dv;
       else if(typeof dv === 'number') date = new Date(Math.round((dv-25569)*86400*1000));
       else if(dv && dv.result instanceof Date) date = dv.result;
-      if(!date || date < monthStart || date >= monthEnd){ row.hidden = true; }
+      if(!date){ row.hidden = true; return; }
+      // 用 yyyy-mm 比對最穩
+      const ym = `${date.getFullYear()}-${pad(date.getMonth()+1)}`;
+      if(ym !== m){ row.hidden = true; return; }
+      // 是目標 → 確保可見
+      row.hidden = false;
     });
 
     const out = await wb.xlsx.writeBuffer();
