@@ -583,51 +583,103 @@ $('t2ResetTpl').addEventListener('click',()=>{
   $('t2info').textContent='選人 → 選月份 → 點每天的狀態 → 產出單人 Excel';
 });
 
-/* ========== 產出 Excel（單人） ========== */
+/* ========== 產出 Excel（單人，保留原檔格式/公式/樣式） ========== */
 $('t2Export').addEventListener('click',()=>{
   const p=$('t2Person').value,m=$('t2Month').value;
   if(!p||!tpl) return;
-  // 用原 buffer 重新解析（保留所有公式格式）
-  const wb=XLSX.read(tpl.buffer,{cellDates:true,cellStyles:true,cellFormula:true});
-  // 保留模板所有 sheet（含 VLOOKUP 用的「店面ID和名称查询」），但工作表1 只留該人的列
+  // 用完整選項重新解析（保留 styles/公式/數字格式）
+  const wb=XLSX.read(tpl.buffer,{cellDates:true,cellStyles:true,cellFormula:true,cellNF:true});
   const ws=wb.Sheets[tpl.sheet];
-  const aoa=XLSX.utils.sheet_to_json(ws,{header:1,defval:null,raw:false});
-  // 找出該人所有 row idx
-  const personRowIdxs=tpl.rows.filter(r=>r.name===p).map(r=>r.rowIdx);
-  // 將該月選定資料寫回對應列
-  const col=tpl.col;
-  // 重新 read raw aoa（含公式 _f）
-  const aoaRaw=XLSX.utils.sheet_to_json(ws,{header:1,defval:null,raw:true});
-  // 做修改：對 personRowIdxs 中、該月的列覆寫 N/O/Q/R/T；其他人/其他月不動
-  personRowIdxs.forEach(ri=>{
-    const r=aoaRaw[ri];if(!r)return;
-    const date=excelDate(r[col.date]);if(!date)return;
+  const range=XLSX.utils.decode_range(ws['!ref']);
+  const colName=tpl.col.name, colDate=tpl.col.date, colStatus=tpl.col.status;
+
+  // 找出該人所有 0-based row index
+  const personRows=[];
+  for(let R=range.s.r;R<=range.e.r;R++){
+    const nameCell=ws[XLSX.utils.encode_cell({c:colName,r:R})];
+    if(nameCell && String(nameCell.v).trim()===p) personRows.push(R);
+  }
+
+  // 套用 editState 到原始 ws cells（針對目標月份）
+  const setCell=(C,R,v,type)=>{
+    const addr=XLSX.utils.encode_cell({c:C,r:R});
+    if(v===null||v===''||v===undefined){
+      ws[addr]={t:'s',v:''};
+    }else if(type==='n'){
+      ws[addr]={...(ws[addr]||{}),v:Number(v),t:'n'};
+      delete ws[addr].f;delete ws[addr].w;
+    }else{
+      ws[addr]={...(ws[addr]||{}),v:String(v),t:'s'};
+      delete ws[addr].f;delete ws[addr].w;
+    }
+  };
+  personRows.forEach(R=>{
+    const dateCell=ws[XLSX.utils.encode_cell({c:colDate,r:R})];
+    if(!dateCell) return;
+    let date=null;
+    if(dateCell.v instanceof Date) date=dateCell.v;
+    else if(typeof dateCell.v==='number') date=new Date(Math.round((dateCell.v-25569)*86400*1000));
+    else if(typeof dateCell.v==='string'){const d=new Date(dateCell.v);if(!isNaN(d))date=d}
+    if(!date) return;
     const key=`${p}|${ymdDash(date)}`;
     const st=editState[key];
     if(!st) return;
-    r[col.status]=st.status;
+    setCell(13,R,st.status);  // N: Status
     if(NEEDS_TIME.has(st.status)){
       const [oH,qM]=st.start.split(':');
       const [rH,tM]=st.end.split(':');
-      r[14]=parseInt(oH);r[16]=qM;r[17]=parseInt(rH);r[19]=tM;
+      setCell(14,R,parseInt(oH),'n');  // O: BOD hour
+      setCell(16,R,qM);                // Q: BOD min '00'/'30'
+      setCell(17,R,parseInt(rH),'n');  // R: EOD hour
+      setCell(19,R,tM);                // T: EOD min
     }else{
-      r[14]=null;r[16]=null;r[17]=null;r[19]=null;
+      setCell(14,R,'');setCell(16,R,'');setCell(17,R,'');setCell(19,R,'');
     }
   });
-  // 篩選：只保留該人 + header 三列
-  const keepRows=new Set([0,1,2]); // 模板前3列(空、header、副標)
-  personRowIdxs.forEach(ri=>keepRows.add(ri));
-  const filtered=aoaRaw.map((r,i)=>keepRows.has(i)?r:null).filter(r=>r!==null);
-  // 重建 sheet：用 aoa_to_sheet 但保留公式不容易，這裡直接用 utils
-  const newWs=XLSX.utils.aoa_to_sheet(filtered);
-  // 保留欄寬
+
+  // 要保留的 0-based row：前 3 列 (header) + 該人所有列
+  const keepRows=[0,1,2,...personRows];
+  // 建立 oldRow(1-based) → newRow(1-based) 對應，給公式 row 改寫用
+  const rowMap={};
+  keepRows.forEach((oldR0,idx)=>{rowMap[oldR0+1]=idx+1});
+
+  // 重建 worksheet：複製保留列的 cells 到新位置，改寫公式中的 row 數字
+  const newWs={};
   if(ws['!cols']) newWs['!cols']=ws['!cols'];
+  if(ws['!merges']){
+    // 過濾保留的 merge（簡化：直接丟棄資料區的 merges，只保留 header 區）
+    newWs['!merges']=ws['!merges'].filter(m=>m.s.r<3 && m.e.r<3);
+  }
+  for(let C=range.s.c;C<=range.e.c;C++){
+    keepRows.forEach((oldR0,idx)=>{
+      const newR0=idx;
+      const oldAddr=XLSX.utils.encode_cell({c:C,r:oldR0});
+      const newAddr=XLSX.utils.encode_cell({c:C,r:newR0});
+      const cell=ws[oldAddr];
+      if(!cell) return;
+      const nc={...cell};
+      if(nc.f){
+        // 改寫公式中的 row 引用 (e.g. N1523 → N5)，保留 col-only 引用 (e.g. L:L)
+        nc.f=nc.f.replace(/(\$?[A-Z]+)(\$?)(\d+)/g,(match,col,abs,row)=>{
+          const old=parseInt(row);
+          if(rowMap[old]) return col+abs+rowMap[old];
+          return match;
+        });
+      }
+      newWs[newAddr]=nc;
+    });
+  }
+  newWs['!ref']=XLSX.utils.encode_range({
+    s:{c:range.s.c,r:0},
+    e:{c:range.e.c,r:keepRows.length-1}
+  });
   wb.Sheets[tpl.sheet]=newWs;
-  // 輸出
-  const out=XLSX.write(wb,{type:'array',bookType:'xlsx',cellDates:true});
+
+  // 輸出（保留 styles 需要 cellStyles:true 但 SheetJS 社群版輸出 styles 有限制；至少公式/欄寬/數字格式會保留）
+  const out=XLSX.write(wb,{type:'array',bookType:'xlsx',cellDates:true,compression:true});
   const blob=new Blob([out],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);
-  const first=p.split(/\s+/)[0];
+  const first=NAME_ALIAS[p]||p.split(/\s+/)[0];
   a.download=`Schedule-${first}-${m}.xlsx`;a.click();
 });
 
