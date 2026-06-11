@@ -49,6 +49,8 @@
   .pcard{background:#1a1e25;border:1px solid var(--bd);border-radius:8px;padding:10px}
   .pcard h3{margin:0 0 6px;font-size:14px}
   .pcard .row{font-size:12px;color:var(--mute);display:flex;justify-content:space-between;padding:2px 0}
+  .pcard .row.long{background:#3a1a1f;border-radius:4px;padding:2px 4px;margin:1px -4px}
+  .pcard .row.long span:first-child{color:#ff6b6b;font-weight:600}
   .toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
   footer{text-align:center;color:var(--mute);font-size:12px;padding:24px 16px}
   footer a{color:var(--mute)}
@@ -288,10 +290,27 @@ function render(){
   const byP={};filtered.forEach(e=>{(byP[e.name]=byP[e.name]||[]).push(e)});
   const cards=Object.keys(byP).sort().map(name=>{
     const list=byP[name];
+    // 偵測連假：連續 N 天有事件(任何休假/PH) → 標記 long
+    const sorted=[...list].sort((a,b)=>a.date-b.date);
+    const longSet=new Set();
+    let runStart=0;
+    for(let i=1;i<=sorted.length;i++){
+      const prev=sorted[i-1].date;
+      const cur=i<sorted.length?sorted[i].date:null;
+      const gap=cur?(cur-prev)/86400000:Infinity;
+      if(gap!==1){
+        const runLen=i-runStart;
+        if(runLen>=4){
+          for(let j=runStart;j<i;j++) longSet.add(ymdDash(sorted[j].date));
+        }
+        runStart=i;
+      }
+    }
     const inner=list.map(e=>{
       const info=LEAVE_INFO[e.status]||{cls:'O',label:''};
       const code=e.status==='\uF8FF'?'Apple':e.status;
-      return `<div class="row"><span>${ymdDash(e.date).slice(5)} (${wkCh[e.date.getDay()]})</span><span class="pill ${info.cls}" style="font-size:11px;padding:1px 6px">${code}</span></div>`;
+      const isLong = longSet.has(ymdDash(e.date));
+      return `<div class="row${isLong?' long':''}"><span>${ymdDash(e.date).slice(5)} (${wkCh[e.date.getDay()]})</span><span class="pill ${info.cls}" style="font-size:11px;padding:1px 6px">${code}</span></div>`;
     }).join('');
     return `<div class="pcard"><h3>${name} <span style="color:var(--mute);font-size:12px;font-weight:400">(${list.length})</span></h3>${inner}</div>`;
   }).join('');
