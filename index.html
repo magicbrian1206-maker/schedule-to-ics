@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>排班 → 行事曆轉換器</title>
+<meta name="description" content="把排班 Excel 一鍵轉成可匯入 Apple/Google 行事曆的 .ics 檔。資料只在瀏覽器處理，不上傳。" />
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+  :root{--bg:#0b0d10;--card:#15181d;--mute:#8a93a0;--accent:#0a84ff;--bd:#262a31;
+        --al:#ff453a;--sl:#ff9f0a;--ph:#30d158;--rph:#5e5ce6;--other:#64d2ff}
+  *{box-sizing:border-box}
+  body{margin:0;font:15px/1.55 -apple-system,"Noto Sans TC",sans-serif;background:var(--bg);color:#e8eaed}
+  header{padding:22px 28px;border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
+  h1{margin:0;font-size:19px}
+  .sub{color:var(--mute);font-size:13px}
+  main{max-width:1200px;margin:0 auto;padding:24px 20px;display:grid;gap:18px}
+  .card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:18px}
+  .drop{border:2px dashed #2c313a;border-radius:12px;padding:48px;text-align:center;cursor:pointer;transition:.15s}
+  .drop:hover,.drop.hover{border-color:var(--accent);background:#0d1419}
+  .drop .ico{font-size:42px}
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  th,td{padding:8px 10px;border-bottom:1px solid var(--bd);text-align:left;white-space:nowrap}
+  th{color:var(--mute);font-weight:600;background:#181c22;position:sticky;top:0}
+  tr:hover td{background:#1a1e25}
+  .pill{display:inline-block;padding:2px 9px;border-radius:6px;font-size:12px;font-weight:600;color:#0b0d10}
+  .pill.AL{background:var(--al);color:#fff}
+  .pill.SL{background:var(--sl)}
+  .pill.PH{background:var(--ph)}
+  .pill.RPH{background:var(--rph);color:#fff}
+  .pill.O{background:var(--other)}
+  button{background:var(--accent);color:#fff;border:0;border-radius:9px;padding:10px 18px;font-size:14px;font-weight:600;cursor:pointer}
+  button.ghost{background:transparent;border:1px solid var(--bd);color:#e8eaed}
+  button:disabled{opacity:.4;cursor:not-allowed}
+  .stat{display:flex;gap:14px;flex-wrap:wrap;color:var(--mute);font-size:13px;margin-bottom:10px}
+  .stat b{color:#fff}
+  .empty{color:var(--mute);text-align:center;padding:30px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px}
+  .pcard{background:#1a1e25;border:1px solid var(--bd);border-radius:8px;padding:10px}
+  .pcard h3{margin:0 0 6px;font-size:14px}
+  .pcard .row{font-size:12px;color:var(--mute);display:flex;justify-content:space-between;padding:2px 0}
+  .toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+  .help{font-size:12.5px;color:var(--mute);line-height:1.7}
+  .help code{background:#0f1216;border:1px solid var(--bd);padding:1px 6px;border-radius:4px;color:#cfd3d8}
+  footer{text-align:center;color:var(--mute);font-size:12px;padding:24px 16px}
+  footer a{color:var(--mute)}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>📅 排班 → 行事曆轉換器</h1>
+    <div class="sub" id="fileinfo">把 Excel 班表丟進來，自動轉成 Apple/Google 行事曆 (.ics)</div>
+  </div>
+  <div style="display:flex;gap:8px">
+    <button class="ghost" id="reset" hidden>重新上傳</button>
+    <button id="dl" hidden>⬇️ 下載 .ics</button>
+  </div>
+</header>
+
+<main>
+  <section id="dropSec" class="card">
+    <label class="drop" id="drop">
+      <input type="file" id="file" accept=".xlsx,.xls" hidden />
+      <div class="ico">📂</div>
+      <div style="margin:10px 0 4px;font-size:16px">把 Excel 拖到這，或<u>點此選檔</u></div>
+      <div class="sub">支援 .xlsx / .xls — 100% 在你瀏覽器處理，不會上傳</div>
+    </label>
+    <div class="help" style="margin-top:18px">
+      <b style="color:#cfd3d8">📋 Excel 格式要求</b><br>
+      • 第 2 列為標題列，至少包含這幾欄：<code>Eng Name</code>（人員）<code>Date</code>（日期）<code>Status</code>（假別代碼）<br>
+      • 資料從第 4 列起<br>
+      • <b>支援代碼</b>：<code>AL</code> 特休、<code>SL</code> 病假、<code>M/MT/PT/B/BT</code> 婚產陪喪/產檢、<code>CL</code> 補休、<code>NP</code> 無薪、<code>OFF</code> 公休、<code>RPH</code> 例休補休、<code>PH1–PH16</code> 國定假日、Apple Holiday<br>
+      • <b>加班自動偵測</b>：當天有人排 PH1–PH16，其他人若狀態是「All day in store」會自動產生「加班」事件<br>
+      • <b>輸出</b>：行事曆標題格式 <code>名字 代碼</code>（例：<code>Brian AL</code>），整日事件，OFF 不匯出
+    </div>
+  </section>
+
+  <section id="resultSec" hidden>
+    <div class="card">
+      <div class="stat" id="stat"></div>
+      <div class="toolbar">
+        <input type="text" id="search" placeholder="搜尋人員或代碼…" style="flex:1;min-width:200px;background:#0f1216;border:1px solid var(--bd);color:#e8eaed;border-radius:8px;padding:8px 12px;font-size:13.5px" />
+      </div>
+      <div id="view"></div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  純前端工具 · 資料不離開你的瀏覽器 ·
+  <a href="https://github.com/" target="_blank" rel="noopener">原始碼</a>
+</footer>
+
+<script>
+const LEAVE_INFO = {
+  'AL':{cls:'AL',label:'特休'}, 'SL':{cls:'SL',label:'病假'},
+  'M':{cls:'O',label:'婚假'}, 'MT':{cls:'O',label:'產假'}, 'PT':{cls:'O',label:'陪產'},
+  'B':{cls:'O',label:'喪假'}, 'BT':{cls:'O',label:'產檢假'},
+  'CL':{cls:'O',label:'補休'}, 'NP':{cls:'O',label:'無薪假'}, 'OFF':{cls:'O',label:'公休'},
+  'W/On Leave':{cls:'O',label:'上班/下午假'}, 'On Leave/W':{cls:'O',label:'上午假/下班'},
+  'RPH':{cls:'RPH',label:'例休補休'},
+  '加班':{cls:'AL',label:'國定假日加班'},
+  'PH1':{cls:'PH',label:'PH1'},'PH2':{cls:'PH',label:'PH2'},'PH3':{cls:'PH',label:'PH3'},
+  'PH4':{cls:'PH',label:'PH4'},'PH5':{cls:'PH',label:'PH5'},'PH6':{cls:'PH',label:'PH6'},
+  'PH7':{cls:'PH',label:'PH7'},'PH8':{cls:'PH',label:'PH8'},'PH9':{cls:'PH',label:'PH9'},
+  'PH10':{cls:'PH',label:'PH10'},'PH11':{cls:'PH',label:'PH11'},'PH12':{cls:'PH',label:'PH12'},
+  'PH13':{cls:'PH',label:'PH13'},'PH14':{cls:'PH',label:'PH14'},'PH15':{cls:'PH',label:'PH15'},
+  'PH16':{cls:'PH',label:'PH16'},
+  '\uF8FF':{cls:'PH',label:'Apple Holiday'}
+};
+const WORK_STATUS = new Set(['All day in store','AM - Meeting/Training, PM - in store',
+  'AM - in store, PM - Meeting/Training','All day Meeting/Training']);
+
+let events = [], fileName = '';
+const $ = id => document.getElementById(id);
+const pad = n => String(n).padStart(2,'0');
+const ymd = d => `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}`;
+const ymdDash = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const wkCh = ['日','一','二','三','四','五','六'];
+
+function excelDate(v){
+  if(v instanceof Date) return v;
+  if(typeof v === 'number') return new Date(Math.round((v-25569)*86400*1000));
+  if(typeof v === 'string'){const d=new Date(v); if(!isNaN(d))return d}
+  return null;
+}
+
+// 自動找欄位 index（不依賴固定欄位順序）
+function detectColumns(aoa){
+  // 在前 5 列裡找 header
+  for(let r=0;r<Math.min(5,aoa.length);r++){
+    const row = aoa[r]||[];
+    const idx = {name:-1,date:-1,status:-1};
+    row.forEach((v,i)=>{
+      const s = String(v||'').toLowerCase().trim();
+      if(idx.name<0 && (s==='eng name'||s==='name'||s==='姓名'||s==='員工'||s==='人員')) idx.name=i;
+      if(idx.date<0 && (s==='date'||s==='日期')) idx.date=i;
+      if(idx.status<0 && (s==='status'||s==='假別'||s==='狀態'||s==='請假')) idx.status=i;
+    });
+    if(idx.name>=0 && idx.date>=0 && idx.status>=0) return {...idx, headerRow:r};
+  }
+  // fallback：用原本 ASC 模板的固定欄位 (E=4, J=9, N=13)
+  return {name:4, date:9, status:13, headerRow:1};
+}
+
+async function readFile(file){
+  fileName = file.name.replace(/\.xlsx?$/i,'');
+  $('fileinfo').textContent = `${file.name} • 解析中…`;
+  try{
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf,{cellDates:true});
+    // 嘗試所有 sheet，挑出能讀出資料最多的那個
+    let best = {events:[], workRows:[], sheet:''};
+    for(const sn of wb.SheetNames){
+      const aoa = XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:null,raw:true});
+      const col = detectColumns(aoa);
+      const ev=[], work=[];
+      for(let i=col.headerRow+1;i<aoa.length;i++){
+        const r=aoa[i]||[];
+        const name=r[col.name], date=excelDate(r[col.date]), st=r[col.status];
+        if(!name || !date || !st) continue;
+        const stT = String(st).trim();
+        if(stT === 'All day in store'){work.push({name:String(name).trim(),date,status:stT});continue}
+        if(WORK_STATUS.has(stT)) continue;
+        if(!LEAVE_INFO[stT]) continue;
+        ev.push({name:String(name).trim(),date,status:stT});
+      }
+      if(ev.length+work.length > best.events.length+best.workRows.length){
+        best = {events:ev, workRows:work, sheet:sn};
+      }
+    }
+    events = best.events;
+    // 加班規則
+    const phDays = new Set(events.filter(e=>/^PH\d+$/.test(e.status)).map(e=>ymdDash(e.date)));
+    best.workRows.forEach(w=>{
+      if(phDays.has(ymdDash(w.date))) events.push({name:w.name,date:w.date,status:'加班'});
+    });
+    events.sort((a,b)=>a.date-b.date || a.name.localeCompare(b.name));
+
+    if(events.length === 0){
+      $('fileinfo').textContent = `${file.name} • 找不到任何假別資料，請確認 Excel 有 Eng Name / Date / Status 欄位`;
+      return;
+    }
+    $('fileinfo').textContent = `${file.name} • 抓到 ${events.length} 筆（工作表：${best.sheet}）`;
+    $('dropSec').hidden = true;
+    $('resultSec').hidden = false;
+    $('reset').hidden = false;
+    $('dl').hidden = false;
+    renderStat(); render();
+  }catch(err){
+    console.error(err);
+    $('fileinfo').textContent = `❌ 解析失敗：${err.message}`;
+  }
+}
+
+function renderStat(){
+  const days = new Set(events.map(e=>ymdDash(e.date)));
+  const people = new Set(events.map(e=>e.name));
+  const dr = events.length ? `${ymdDash(events[0].date)} ~ ${ymdDash(events[events.length-1].date)}` : '-';
+  $('stat').innerHTML = `
+    <div>📊 共 <b>${events.length}</b> 筆</div>
+    <div>👥 <b>${people.size}</b> 人</div>
+    <div>📅 <b>${days.size}</b> 天</div>
+    <div>🗓️ ${dr}</div>`;
+}
+
+$('search').addEventListener('input', render);
+
+function render(){
+  const q = $('search').value.trim().toLowerCase();
+  const filtered = q ? events.filter(e=>
+    e.name.toLowerCase().includes(q) || e.status.toLowerCase().includes(q) ||
+    (LEAVE_INFO[e.status]?.label||'').includes(q)) : events;
+
+  if(filtered.length === 0){
+    $('view').innerHTML = `<div class="empty">${events.length? '沒有符合搜尋的結果' : '這份 Excel 沒有任何假別紀錄'}</div>`;
+    return;
+  }
+  const byP = {};
+  filtered.forEach(e=>{(byP[e.name]=byP[e.name]||[]).push(e)});
+  const cards = Object.keys(byP).sort().map(name=>{
+    const list = byP[name];
+    const inner = list.map(e=>{
+      const info = LEAVE_INFO[e.status]||{cls:'O',label:''};
+      const code = e.status==='\uF8FF'?'Apple':e.status;
+      return `<div class="row"><span>${ymdDash(e.date).slice(5)} (${wkCh[e.date.getDay()]})</span><span class="pill ${info.cls}" style="font-size:11px;padding:1px 6px">${code}</span></div>`;
+    }).join('');
+    return `<div class="pcard"><h3>${name} <span style="color:var(--mute);font-size:12px;font-weight:400">(${list.length})</span></h3>${inner}</div>`;
+  }).join('');
+  $('view').innerHTML = `<div class="grid">${cards}</div>`;
+}
+
+function buildICS(){
+  const stamp = (()=>{const d=new Date();return `${d.getUTCFullYear()}${pad(d.getUTCMonth()+1)}${pad(d.getUTCDate())}T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}${pad(d.getUTCSeconds())}Z`})();
+  const L=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Schedule to ICS//EN','CALSCALE:GREGORIAN','METHOD:PUBLISH'];
+  const EXPORT_SKIP = new Set(['OFF']);
+  events.forEach(e=>{
+    if(EXPORT_SKIP.has(e.status)) return;
+    const ds=ymd(e.date), de=ymd(new Date(e.date.getTime()+86400000));
+    const first=e.name.split(/\s+/)[0];
+    const code=e.status==='\uF8FF'?'Apple':e.status;
+    L.push('BEGIN:VEVENT',
+      `UID:sch-${ds}-${first}-${code.replace(/\W/g,'')}@local`,
+      `DTSTAMP:${stamp}`,`DTSTART;VALUE=DATE:${ds}`,`DTEND;VALUE=DATE:${de}`,
+      `SUMMARY:${first} ${code}`,`DESCRIPTION:${e.name} • ${LEAVE_INFO[e.status]?.label||''}`,
+      'TRANSP:TRANSPARENT','END:VEVENT');
+  });
+  L.push('END:VCALENDAR');
+  return L.join('\r\n');
+}
+
+$('dl').addEventListener('click',()=>{
+  const blob=new Blob([buildICS()],{type:'text/calendar;charset=utf-8'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download=`${fileName||'Schedule'}.ics`; a.click();
+});
+$('reset').addEventListener('click',()=>{
+  events=[]; $('dropSec').hidden=false; $('resultSec').hidden=true;
+  $('reset').hidden=true; $('dl').hidden=true;
+  $('fileinfo').textContent='把 Excel 班表丟進來，自動轉成 Apple/Google 行事曆 (.ics)';
+  $('file').value='';
+});
+
+const drop=$('drop'), fi=$('file');
+drop.addEventListener('click',()=>fi.click());
+fi.addEventListener('change',e=>{if(e.target.files[0]) readFile(e.target.files[0])});
+['dragover','dragenter'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('hover')}));
+['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('hover')}));
+drop.addEventListener('drop',e=>{e.preventDefault();drop.classList.remove('hover');if(e.dataTransfer.files[0])readFile(e.dataTransfer.files[0])});
+</script>
+</body>
+</html>
