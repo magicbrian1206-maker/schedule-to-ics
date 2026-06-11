@@ -12,6 +12,8 @@
         --al:#ff453a;--sl:#ff9f0a;--ph:#30d158;--rph:#5e5ce6;--other:#64d2ff;--meet:#bf5af2}
   *{box-sizing:border-box}
   [hidden]{display:none !important}
+  .tabpanel{display:none}
+  .tabpanel.show{display:block}
   body{margin:0;font:15px/1.55 -apple-system,"Noto Sans TC",sans-serif;background:var(--bg);color:#e8eaed}
   header{padding:18px 28px;border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
   h1{margin:0;font-size:19px}
@@ -71,7 +73,7 @@
 </div>
 
 <!-- ============ TAB 1: ICS Converter ============ -->
-<section id="t1" class="tabpanel">
+<section id="t1" class="tabpanel show">
 <header>
   <div>
     <h1>📅 排班 → 行事曆轉換器</h1>
@@ -106,7 +108,7 @@
 </section>
 
 <!-- ============ TAB 2: 個人班表產生器 ============ -->
-<section id="t2" class="tabpanel" hidden>
+<section id="t2" class="tabpanel">
 <header>
   <div>
     <h1>📝 個人班表產生器</h1>
@@ -192,7 +194,7 @@ function excelDate(v){
 /* ========== Tab 切換 ========== */
 document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
   document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x===t));
-  document.querySelectorAll('.tabpanel').forEach(p=>p.hidden = (p.id !== t.dataset.tab));
+  document.querySelectorAll('.tabpanel').forEach(p=>p.classList.toggle('show', p.id === t.dataset.tab));
 }));
 
 /* ========== TAB 1：ICS 轉換器 ========== */
