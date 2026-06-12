@@ -552,17 +552,14 @@ $('dl').addEventListener('click', async ()=>{
     ws.dataValidations.add(`T4:T${lastR2}`, {type:'list', allowBlank:true, formulae:['"00,30"']});
     ws.dataValidations.add(`V4:V${lastR2}`, {type:'list', allowBlank:true, formulae:['"AM,PM"']});
 
-    // 改用 N 欄(Status)判斷該列是否要保留 — 比 L 欄(可能殘留公式) 可靠
+    // 不刪列！N 欄(Status)空白的列改用「隱藏」，使用者清除篩選即可拉回全部
     const colN_idx = 14;
     const colM_idx = 13;
-    const rowsToDelete = [];
     for(let r=4; r<=ws.actualRowCount; r++){
       const v = ws.getRow(r).getCell(colN_idx).value;
       const s = (v && typeof v==='object' && 'result' in v) ? v.result : v;
-      if(s===null || s===undefined || String(s).trim()==='') rowsToDelete.push(r);
-    }
-    for(let i=rowsToDelete.length-1; i>=0; i--){
-      ws.spliceRows(rowsToDelete[i], 1);
+      const empty = (s===null || s===undefined || String(s).trim()==='');
+      ws.getRow(r).hidden = empty;   // 沒資料 → 隱藏(非刪除)
     }
 
     // 重新寫 M 欄 VLOOKUP 公式（之前因公式轉純值變成死的 #N/A）
@@ -574,7 +571,7 @@ $('dl').addEventListener('click', async ()=>{
       };
     }
 
-    // 刪列後重設 autoFilter + N/O/Q/R/T/V 下拉到新範圍
+    // 重設 autoFilter + N/O/Q/R/T/V 下拉到全範圍
     ws.autoFilter = null;
     ws.autoFilter = { from:{row:2,column:1}, to:{row:newLast, column:23} };
     if(ws.dataValidations && ws.dataValidations.model){
