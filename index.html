@@ -489,7 +489,7 @@ $('dl').addEventListener('click', async ()=>{
     // 依 D 欄(EEID)數字由小到大排序資料區（row 4 起）
     // 抽出數字部分排序，避免 "EE229698" 這種字串造成怪順序
     const sortStart = 4;
-    const sortEnd = ws.actualRowCount;
+    const sortEnd = ws.rowCount;
     if(sortEnd >= sortStart){
       const snapshot = [];
       for(let r=sortStart; r<=sortEnd; r++){
@@ -534,7 +534,7 @@ $('dl').addEventListener('click', async ()=>{
     // 清掉舊的 autoFilter 跟所有 row hidden（避免 Excel 開檔時隱藏資料），再重設一次乾淨的
     ws.autoFilter = null;
     ws.eachRow({includeEmpty:false}, row=>{ if(row.hidden) row.hidden = false; });
-    ws.autoFilter = { from:{row:2,column:1}, to:{row:ws.actualRowCount, column:23} };
+    ws.autoFilter = { from:{row:2,column:1}, to:{row:ws.rowCount, column:23} };
 
     // 清掉所有資料區欄位的 cell 級 dataValidation（ExcelJS 載入時把整欄展開成數百萬 cell，輸出時拆成重疊段）
     if(ws.dataValidations && ws.dataValidations.model){
@@ -545,7 +545,7 @@ $('dl').addEventListener('click', async ()=>{
       }
     }
     // 重設乾淨的整欄 dataValidation
-    const lastR2 = ws.actualRowCount;
+    const lastR2 = ws.rowCount;
     ws.dataValidations.add(`N4:N${lastR2}`, {type:'list', allowBlank:true, formulae:['$Z$6:$Z$39']});
     ws.dataValidations.add(`O4:O${lastR2}`, {type:'list', allowBlank:true, formulae:['"1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24"']});
     ws.dataValidations.add(`R4:R${lastR2}`, {type:'list', allowBlank:true, formulae:['"1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24"']});
@@ -562,7 +562,7 @@ $('dl').addEventListener('click', async ()=>{
     const colYear_=7, colQuarter_=8, colWeek_=9;  // G/H/I 欄
     const clearOrphanCols = [12,13,14,15,17,18,20,23]; // L M N O Q R T W
     const fnWeeks = new Set(); let fnYear=null, fnQuarter=null, firstDataMonth=null;
-    for(let r=4; r<=ws.actualRowCount; r++){
+    for(let r=4; r<=ws.rowCount; r++){
       const lv = ws.getRow(r).getCell(colL_idx).value;
       const ls = (lv && typeof lv==='object' && 'result' in lv) ? lv.result : lv;
       const empty = (ls===null || ls===undefined || String(ls).trim()==='');
@@ -584,7 +584,7 @@ $('dl').addEventListener('click', async ()=>{
     }
 
     // 重新寫 M 欄 VLOOKUP 公式（之前因公式轉純值變成死的 #N/A）
-    const newLast = ws.actualRowCount;
+    const newLast = ws.rowCount;
     for(let r=4; r<=newLast; r++){
       ws.getRow(r).getCell(colM_idx).value = {
         formula: `IFERROR(VLOOKUP(L${r},'店面ID和名称查询'!A:B,2,FALSE),"")`,
@@ -1135,7 +1135,7 @@ $('t2Export').addEventListener('click', async ()=>{
 
     // 隱藏其他人 + 清空其他人的舊資料（選項A：產出只有該人乾淨資料，Tab2 才不會誤判）
     const colDate2 = colDate;
-    const lastR = ws.actualRowCount;
+    const lastR = ws.rowCount;
     const clearCols = [colL, colM, colN, colO, colQ, colR_, colT, colW]; // 12,13,14,15,17,18,20,23 (補 M 欄避免殘留 #N/A)
     for(let r=4; r<=lastR; r++){
       const row = ws.getRow(r);
@@ -1157,7 +1157,7 @@ $('t2Export').addEventListener('click', async ()=>{
       }
     }
 
-    const newLast = ws.actualRowCount;
+    const newLast = ws.rowCount;
     // 開檔捲到該人第一列
     ws.views = [{ state:'normal', topLeftCell:`A${Math.max(1,(firstRow||4)-1)}`, activeCell:`A${firstRow||4}`, showGridLines:true }];
 
