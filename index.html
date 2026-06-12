@@ -555,11 +555,26 @@ $('dl').addEventListener('click', async ()=>{
     // 不刪列！N 欄(Status)空白的列改用「隱藏」，使用者清除篩選即可拉回全部
     const colN_idx = 14;
     const colM_idx = 13;
+    const colYear_=7, colQuarter_=8, colWeek_=9;  // G/H/I 欄
+    const fnWeeks = new Set(); let fnYear=null, fnQuarter=null, firstDataMonth=null;
     for(let r=4; r<=ws.actualRowCount; r++){
       const v = ws.getRow(r).getCell(colN_idx).value;
       const s = (v && typeof v==='object' && 'result' in v) ? v.result : v;
       const empty = (s===null || s===undefined || String(s).trim()==='');
       ws.getRow(r).hidden = empty;   // 沒資料 → 隱藏(非刪除)
+      if(!empty){
+        const wv=ws.getRow(r).getCell(colWeek_).value; if(wv) fnWeeks.add(String(wv).trim());
+        if(fnYear===null){ const yv=ws.getRow(r).getCell(colYear_).value; if(yv) fnYear=parseInt(String(yv).replace(/\D/g,''),10); }
+        if(fnQuarter===null){ const qv=ws.getRow(r).getCell(colQuarter_).value; if(qv) fnQuarter=String(qv).trim(); }
+        if(firstDataMonth===null){
+          const dv=ws.getRow(r).getCell(colDate).value;
+          let dt=null;
+          if(dv instanceof Date) dt=dv;
+          else if(typeof dv==='number') dt=new Date(Math.round((dv-25569)*86400*1000));
+          else if(dv && dv.result instanceof Date) dt=dv.result;
+          if(dt) firstDataMonth = dt.getMonth()+1;
+        }
+      }
     }
 
     // 重新寫 M 欄 VLOOKUP 公式（之前因公式轉純值變成死的 #N/A）
@@ -590,7 +605,17 @@ $('dl').addEventListener('click', async ()=>{
     const blob = new Blob([out],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `Schedule-Integrated.xlsx`;
+    // 檔名：FY{年}Q{季} W{min}-W{max} ASC Scheduling Dragon Team
+    const wkN = [...fnWeeks].map(w=>parseInt(String(w).replace(/\D/g,''),10)).filter(n=>!isNaN(n)).sort((x,y)=>x-y);
+    const wkR = wkN.length ? (wkN.length===1 ? `W${wkN[0]}` : `W${wkN[0]}-W${wkN[wkN.length-1]}`) : '';
+    let fyL = 'FY';
+    if(fnYear){
+      // 由底檔第一筆有資料列的月份決定財年（Apple FY：10月起算下一年）
+      const mNum = (firstDataMonth!=null) ? firstDataMonth : 1;
+      const fyNum = (mNum >= 10) ? (fnYear + 1) : fnYear;
+      fyL = 'FY' + String(fyNum).slice(-2);
+    }
+    a.download = `${fyL}${fnQuarter||''} ${wkR} ASC Scheduling Dragon Team.xlsx`;
     a.click();
     $('fileinfo').textContent = `✅ 已產出 • 保留 ${stats.overwritten} 列 • 涵蓋 ${[...stats.addedPeople].join('、')||'無'}`;
   }catch(err){
