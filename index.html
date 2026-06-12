@@ -552,21 +552,28 @@ $('dl').addEventListener('click', async ()=>{
     ws.dataValidations.add(`T4:T${lastR2}`, {type:'list', allowBlank:true, formulae:['"00,30"']});
     ws.dataValidations.add(`V4:V${lastR2}`, {type:'list', allowBlank:true, formulae:['"AM,PM"']});
 
+    // 只保留 L 欄(店號)有填的列 — 刪掉所有 L 欄空白的資料列
+    const colL_idx = 12;
+    const rowsToDelete = [];
+    for(let r=4; r<=ws.actualRowCount; r++){
+      const v = ws.getRow(r).getCell(colL_idx).value;
+      if(v===null || v===undefined || String(v).trim()==='') rowsToDelete.push(r);
+    }
+    // 從下往上刪，避免 row 號錯亂
+    for(let i=rowsToDelete.length-1; i>=0; i--){
+      ws.spliceRows(rowsToDelete[i], 1);
+    }
+    // 重設 autoFilter 範圍到新的尾列
+    ws.autoFilter = null;
+    ws.autoFilter = { from:{row:2,column:1}, to:{row:ws.actualRowCount, column:23} };
+
     const out = await wb.xlsx.writeBuffer();
     const blob = new Blob([out],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = `Schedule-Integrated.xlsx`;
     a.click();
-    // 合併報告（嚴禁 silent skip）
-    const lines = [`✅ 合併完成`, ``,
-      `📦 檔案數：${stats.files}`,
-      `✏️ 覆寫列：${stats.overwritten}`,
-      `👥 涵蓋人員：${[...stats.addedPeople].join('、')||'無'}`];
-    if(stats.skipped>0) lines.push(`⚠️ 找不到對應列（同人同日）：${stats.skipped} 筆`);
-    if(stats.missPeople.size>0) lines.push(`❌ Eng Name 對不到中文：${[...stats.missPeople].join('、')}`);
-    $('fileinfo').textContent = `已產出 • 覆寫 ${stats.overwritten} 列 / ${stats.addedPeople.size} 人`;
-    alert(lines.join('\n'));
+    $('fileinfo').textContent = `✅ 已產出 • 保留 ${stats.overwritten} 列 • 涵蓋 ${[...stats.addedPeople].join('、')||'無'}`;
   }catch(err){
     console.error(err);
     alert('整合失敗：'+err.message);
