@@ -409,11 +409,13 @@ $('dl').addEventListener('click', async ()=>{
       return null;
     }
 
-    // 攤平 shared formula 避免 row 操作時 master 不見
+    // 把整張底檔所有公式 cell 一次性轉成純值（含 shared/array/normal）
+    // 完全消除 shared formula master/refs 關係，後續任何 row 操作都不會炸
     ws.eachRow({includeEmpty:false}, row=>{
       row.eachCell({includeEmpty:false}, cell=>{
-        if(cell.formula && cell.model && cell.model.shareType==='shared'){
-          cell.value={formula:cell.formula, result:cell.result};
+        const v = cell.value;
+        if(v && typeof v === 'object' && ('formula' in v || 'sharedFormula' in v)){
+          cell.value = ('result' in v) ? v.result : null;
         }
       });
     });
