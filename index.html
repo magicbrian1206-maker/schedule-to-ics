@@ -446,6 +446,17 @@ $('dl').addEventListener('click', async ()=>{
       const srcAoa = XLSX.utils.sheet_to_json(srcWb.Sheets[src.sheet],{header:1,defval:null,raw:true});
       const sc = src.col;
 
+      // 先掃一遍：該檔哪些人「真的有編輯」(L 或 N 任一非空)
+      const editedCN = new Set();
+      for(let r=sc.headerRow+1; r<srcAoa.length; r++){
+        const row=srcAoa[r]||[];
+        const eng=row[sc.name], asc=row[5];
+        if(!eng) continue;
+        const cn = resolveCN(eng, asc);
+        if(!cn) continue;
+        if(row[11]!=null || row[13]!=null) editedCN.add(cn);
+      }
+
       for(let r=sc.headerRow+1; r<srcAoa.length; r++){
         const row = srcAoa[r] || [];
         const engName = row[sc.name];
@@ -453,6 +464,8 @@ $('dl').addEventListener('click', async ()=>{
         if(!engName) continue;
         const cn = resolveCN(engName, ascName);
         if(!cn){ stats.missPeople.add(String(engName).trim()); continue; }
+        // 只覆寫該檔真的有編輯的人，其他人不動（保留底檔資料）
+        if(!editedCN.has(cn)) continue;
 
         const date = excelDate(row[sc.date]);
         if(!date) continue;
