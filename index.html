@@ -546,7 +546,12 @@ $('dl').addEventListener('click', async ()=>{
     }
     // 重設乾淨的整欄 dataValidation
     const lastR2 = ws.rowCount;
+<<<<<<< Updated upstream
     ws.dataValidations.add(`N4:N${lastR2}`, {type:'list', allowBlank:true, formulae:['$Z$6:$Z$39']});
+=======
+    const zRangeT2 = writeStatusListToZ(ws);
+    ws.dataValidations.add(`N4:N${lastR2}`, {type:'list', allowBlank:true, formulae:[`$Z$${zRangeT2.from}:$Z$${zRangeT2.to}`]});
+>>>>>>> Stashed changes
     ws.dataValidations.add(`O4:O${lastR2}`, {type:'list', allowBlank:true, formulae:['"1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24"']});
     ws.dataValidations.add(`R4:R${lastR2}`, {type:'list', allowBlank:true, formulae:['"1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24"']});
     ws.dataValidations.add(`Q4:Q${lastR2}`, {type:'list', allowBlank:true, formulae:['"00,30"']});
@@ -599,7 +604,8 @@ $('dl').addEventListener('click', async ()=>{
       Object.keys(ws.dataValidations.model).forEach(k=>delete ws.dataValidations.model[k]);
     }
     if(newLast >= 4){
-      ws.dataValidations.add(`N4:N${newLast}`, {type:'list', allowBlank:true, formulae:['"AL,SL,M,MT,PT,B,BT,CL,NP,OFF,RPH,All day in store,AM - Meeting/Training\\, PM - in store,AM - in store\\, PM - Meeting/Training,All day Meeting/Training,W/On Leave,On Leave/W,PH1,PH2,PH3,PH4,PH5,PH6,PH7,PH8,PH9,PH10,PH11,PH12,PH13,PH14,PH15,PH16"']});
+      const zRangeT1 = writeStatusListToZ(ws);
+      ws.dataValidations.add(`N4:N${newLast}`, {type:'list', allowBlank:true, formulae:[`$Z$${zRangeT1.from}:$Z$${zRangeT1.to}`]});
       ws.dataValidations.add(`O4:O${newLast}`, {type:'list', allowBlank:true, formulae:['"1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24"']});
       ws.dataValidations.add(`R4:R${newLast}`, {type:'list', allowBlank:true, formulae:['"1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24"']});
       ws.dataValidations.add(`Q4:Q${newLast}`, {type:'list', allowBlank:true, formulae:['"00,30"']});
@@ -676,6 +682,17 @@ const TPL_KEY = 'schedule-template-v1';
 const EARLY_FIRST = new Set(['Vic','Brian','Vincent','Jessie','Daisy','Kristin']); // 12:00–21:00
 const ALLOWED_FIRST = new Set(['Brian','Adam','Kay','Vic','Haidee','Daisy','Elay','Emily','Jessie','Vincent','Kristin','Paty']);
 const NAME_ALIAS = {'Chou Meng Hua':'Haidee'}; // Excel 名 → 顯示用 First
+// 把狀態清單寫進工作表 Z 欄(Z6 起)，N 欄下拉指向 $Z$6:$Z$n。
+// 為何不用硬寫清單字串：選項含逗號(如 "AM - Meeting/Training, PM - in store")會被 Excel 當分隔符拆斷→少字。
+// 寫進儲存格範圍就不會被逗號影響。
+function writeStatusListToZ(ws){
+  const vals = STATUS_OPTIONS.map(o=>o.v).filter(v=>v && v!=='\uF8FF'); // 去掉 Apple logo 特殊字
+  const start = 6;
+  for(let i=0;i<vals.length;i++){ ws.getCell('Z'+(start+i)).value = vals[i]; }
+  // 清掉殘留(避免上次更長)
+  for(let i=vals.length;i<60;i++){ const c=ws.getCell('Z'+(start+i)); if(c.value!=null) c.value=null; }
+  return { from:start, to:start+vals.length-1 }; // e.g. Z6:Z40
+}
 const STATUS_OPTIONS = [
   {v:'All day in store', g:'work'},
   {v:'AM - Meeting/Training, PM - in store', g:'meet'},
