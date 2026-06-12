@@ -780,7 +780,7 @@ async function loadTemplateFromStorage(){
       const name=r[col.name],date=excelDate(r[col.date]);
       if(!name||!date) continue;
       rows.push({rowIdx:i,name:String(name).trim(),date,
-        status:r[col.status]||'',o:r[14],q:r[16],rh:r[17],t:r[19],l:r[11]});
+        status:r[col.status]||'',o:r[14],q:r[16],rh:r[17],t:r[19],l:r[11],remark:r[22]||''});
     }
     const people=[...new Set(rows.map(r=>r.name))].sort();
     const months=[...new Set(rows.map(r=>`${r.date.getFullYear()}-${pad(r.date.getMonth()+1)}`))].sort();
@@ -831,7 +831,7 @@ function loadExistingIntoState(){
       const wd=r.date.getDay();
       const baseStore = r.l ? String(r.l) : defaultStore;
       if(wd===1||wd===2){
-        editState[k]={status:'OFF',start:'',end:'',storeId:baseStore};
+        editState[k]={status:'OFF',start:'',end:'',storeId:baseStore,remark:r.remark||''};
         return;
       }
       let status=r.status||'All day in store';
@@ -840,7 +840,7 @@ function loadExistingIntoState(){
         const o=String(r.o),q=String(r.q||'00').padStart(2,'0'),rh=String(r.rh),t=String(r.t||'00').padStart(2,'0');
         start=`${pad(o)}:${q}`;end=`${pad(rh)}:${t}`;
       }
-      editState[k]={status,start,end,storeId:baseStore};
+      editState[k]={status,start,end,storeId:baseStore,remark:r.remark||''};
     });
 }
 
@@ -863,15 +863,13 @@ function renderCalendar(){
     if(!editState[k]){
       const wd=dt.getDay();
       if(wd===1||wd===2){
-        editState[k]={status:'OFF',start:'',end:'',storeId:defaultStore};
+        editState[k]={status:'OFF',start:'',end:'',storeId:defaultStore,remark:''};
       }else{
         const tm=defaultTime(p);
-        editState[k]={status:'All day in store',start:tm.start,end:tm.end,storeId:defaultStore};
+        editState[k]={status:'All day in store',start:tm.start,end:tm.end,storeId:defaultStore,remark:''};
       }
     }
-    const st=editState[k];
-    const cls=statusClass(st.status);
-    const showTime = NEEDS_TIME.has(st.status);
+    const showRemark = st.status !== 'All day in store';
     html+=`<div class="day s-${cls}" data-key="${k}">
       <div class="date">${d} (${wkCh[dt.getDay()]})</div>
       <select data-act="status">${STATUS_OPTIONS.map(o=>{
@@ -886,6 +884,7 @@ function renderCalendar(){
         <input type="time" value="${st.start}" data-act="start">–
         <input type="time" value="${st.end}" data-act="end">
       </div>`:''}
+      ${showRemark?`<input type="text" placeholder="備註…" value="${(st.remark||'').replace(/"/g,'&quot;')}" data-act="remark" style="width:100%;font-size:11px;margin-top:4px;padding:3px 5px;background:#0f1216;border:1px solid var(--bd);color:#e8eaed;border-radius:4px" />`:''}
     </div>`;
   }
   $('t2Cal').innerHTML=html;
@@ -908,9 +907,11 @@ function renderCalendar(){
     const si=box.querySelector('[data-act="start"]');
     const ei=box.querySelector('[data-act="end"]');
     const ss=box.querySelector('[data-act="store"]');
+    const ri=box.querySelector('[data-act="remark"]');
     if(si)si.addEventListener('change',e=>editState[k].start=e.target.value);
     if(ei)ei.addEventListener('change',e=>editState[k].end=e.target.value);
     if(ss)ss.addEventListener('change',e=>editState[k].storeId=e.target.value);
+    if(ri)ri.addEventListener('input',e=>editState[k].remark=e.target.value);
   });
 }
 
@@ -1030,7 +1031,7 @@ $('t2Export').addEventListener('click', async ()=>{
 
     const colName = tpl.col.name + 1;   // ExcelJS 是 1-based
     const colDate = tpl.col.date + 1;
-    const colL = 12, colN = 14, colO = 15, colQ = 17, colR_ = 18, colT = 20;
+    const colL = 12, colN = 14, colO = 15, colQ = 17, colR_ = 18, colT = 20, colW = 23;
 
     // 該月起訖
     const [yy,mm] = m.split('-').map(Number);
@@ -1082,6 +1083,8 @@ $('t2Export').addEventListener('click', async ()=>{
         row.getCell(colR_).value = null;
         row.getCell(colT).value  = null;
       }
+      // W 欄(Remark)：只有非 All day in store 時寫備註
+      row.getCell(colW).value = (st.status !== 'All day in store' && st.remark) ? st.remark : null;
       modifiedCount++;
     });
 
