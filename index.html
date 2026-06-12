@@ -1127,9 +1127,10 @@ $('t2Export').addEventListener('click', async ()=>{
       return;
     }
 
-    // 不刪列！改用「隱藏」其他人的列，使用者清除篩選即可拉回全部
+    // 隱藏其他人 + 清空其他人的舊資料（選項A：產出只有該人乾淨資料，Tab2 才不會誤判）
     const colDate2 = colDate;
     const lastR = ws.actualRowCount;
+    const clearCols = [colL, colN, colO, colQ, colR_, colT, colW]; // 12,14,15,17,18,20,23
     for(let r=4; r<=lastR; r++){
       const row = ws.getRow(r);
       const nameVal = row.getCell(colName).value;
@@ -1144,6 +1145,10 @@ $('t2Export').addEventListener('click', async ()=>{
         if(date && date>=monthStart && date<monthEnd) keep = true;
       }
       row.hidden = !keep;   // 非該人該月 → 隱藏（非刪除）
+      if(!keep){
+        // 清空其他人/其他月的編輯欄位，避免殘留舊資料被 Tab2 誤判
+        clearCols.forEach(c=>{ row.getCell(c).value = null; });
+      }
     }
 
     const newLast = ws.actualRowCount;
