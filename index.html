@@ -869,6 +869,9 @@ function renderCalendar(){
         editState[k]={status:'All day in store',start:tm.start,end:tm.end,storeId:defaultStore,remark:''};
       }
     }
+    const st=editState[k];
+    const cls=statusClass(st.status);
+    const showTime = NEEDS_TIME.has(st.status);
     const showRemark = st.status !== 'All day in store';
     html+=`<div class="day s-${cls}" data-key="${k}">
       <div class="date">${d} (${wkCh[dt.getDay()]})</div>
