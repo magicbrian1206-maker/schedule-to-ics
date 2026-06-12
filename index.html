@@ -1042,6 +1042,9 @@ $('t2Export').addEventListener('click', async ()=>{
     let firstRow = null;  // 該人該月第一列，給開檔時自動捲到
     const weekSet = new Set();  // 收集該人該月的週次 (WK10..WK13) 給檔名
     const colWeek = 9;          // I 欄 = Week
+    const colYear = 7;          // G 欄 = Year
+    const colQuarter = 8;       // H 欄 = Quarter
+    let fyYear=null, fyQuarter=null;
     ws.eachRow({includeEmpty:false}, (row, rNum)=>{
       if(rNum < 4) return; // header
       const nameVal = row.getCell(colName).value;
@@ -1063,6 +1066,8 @@ $('t2Export').addEventListener('click', async ()=>{
       if(firstRow === null) firstRow = rNum;
       const wk = row.getCell(colWeek).value;
       if(wk) weekSet.add(String(wk).trim());
+      if(fyYear===null){ const yv=row.getCell(colYear).value; if(yv) fyYear=parseInt(String(yv).replace(/\D/g,''),10); }
+      if(fyQuarter===null){ const qv=row.getCell(colQuarter).value; if(qv) fyQuarter=String(qv).trim(); }
 
       // 寫入 N
       row.getCell(colN).value = st.status;
@@ -1138,7 +1143,15 @@ $('t2Export').addEventListener('click', async ()=>{
     const first = NAME_ALIAS[p] || p.split(/\s+/)[0];
     const wkNums = [...weekSet].map(w=>parseInt(String(w).replace(/\D/g,''),10)).filter(n=>!isNaN(n)).sort((x,y)=>x-y);
     const wkRange = wkNums.length ? (wkNums.length===1 ? `W${wkNums[0]}` : `W${wkNums[0]}-W${wkNums[wkNums.length-1]}`) : '';
-    a.download = `FY26Q3 ${wkRange} ASC Scheduling by ${first}.xlsx`;
+    // FY 算法：Apple 財年 = 月曆年的 10 月起算下一財年。範本通常已有 Year/Quarter 可直接用。
+    // FY label：取 Year 後兩碼；若月份>=10(Q1)則財年要+1
+    let fyLabel = 'FY';
+    if(fyYear){
+      const fyNum = (mm >= 10) ? (fyYear + 1) : fyYear;
+      fyLabel = 'FY' + String(fyNum).slice(-2);
+    }
+    const qLabel = fyQuarter || '';
+    a.download = `${fyLabel}${qLabel} ${wkRange} ASC Scheduling by ${first}.xlsx`;
     a.click();
   }catch(err){
     console.error(err);
