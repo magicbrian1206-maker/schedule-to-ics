@@ -408,11 +408,19 @@ $('dl').addEventListener('click', async ()=>{
       const srcWs = srcWbXjs.getWorksheet(src.sheet);
       if(!srcWs) continue;
 
-      const dataStartRow = sc.headerRow + 2; // headerRow 0-based; ExcelJS 1-based, 資料起始 = headerRow+2
+      // 先把來源檔所有 shared formula 攤平成 normal formula，避免 clone 時 master 找不到
+      srcWs.eachRow({includeEmpty:false}, row=>{
+        row.eachCell({includeEmpty:false}, cell=>{
+          if(cell.formula && cell.model && cell.model.shareType==='shared'){
+            cell.value = {formula:cell.formula, result:cell.result};
+          }
+        });
+      });
+
+      const dataStartRow = sc.headerRow + 2;
       const lastRow = srcWs.actualRowCount;
       for(let r=dataStartRow; r<=lastRow; r++){
         const srcRow = srcWs.getRow(r);
-        // 跳完全空的列
         let hasAny = false;
         srcRow.eachCell({includeEmpty:false}, ()=>{ hasAny = true; });
         if(!hasAny) continue;
@@ -420,17 +428,17 @@ $('dl').addEventListener('click', async ()=>{
         const newRow = ws.addRow([]);
         srcRow.eachCell({includeEmpty:true},(cell, colNumber)=>{
           const nc = newRow.getCell(colNumber);
-          if(cell.formula && cell.model && cell.model.shareType==='shared'){
-            nc.value = {formula:cell.formula, result:cell.result};
-          } else if(cell.value !== null && cell.value !== undefined){
-            nc.value = cell.value;
+          let v = cell.value;
+          // 公式 → 直接寫結果值（避免任何 shared/cross-sheet ref 問題）
+          if(v && typeof v === 'object' && 'formula' in v){
+            v = ('result' in v) ? v.result : null;
           }
+          if(v !== null && v !== undefined) nc.value = v;
           if(cell.style) { try{ nc.style = JSON.parse(JSON.stringify(cell.style)); }catch(e){} }
           if(cell.numFmt) nc.numFmt = cell.numFmt;
         });
         if(srcRow.height) newRow.height = srcRow.height;
 
-        // 蒐集 Eng Name 用來報告
         const nv = srcRow.getCell(colName).value;
         if(nv) stats.addedPeople.add(String(nv).trim());
         stats.appended++;
@@ -447,8 +455,12 @@ $('dl').addEventListener('click', async ()=>{
         const row = ws.getRow(r);
         const cells = {};
         row.eachCell({includeEmpty:true},(cell, colNumber)=>{
+          let v = cell.value;
+          if(v && typeof v === 'object' && 'formula' in v){
+            v = ('result' in v) ? v.result : null;
+          }
           cells[colNumber] = {
-            value: cell.value,
+            value: v,
             style: cell.style ? JSON.parse(JSON.stringify(cell.style)) : null,
             numFmt: cell.numFmt || null
           };
