@@ -553,16 +553,21 @@ $('dl').addEventListener('click', async ()=>{
     ws.dataValidations.add(`T4:T${lastR2}`, {type:'list', allowBlank:true, formulae:['"00,30"']});
     ws.dataValidations.add(`V4:V${lastR2}`, {type:'list', allowBlank:true, formulae:['"AM,PM"']});
 
-    // 不刪列！N 欄(Status)空白的列改用「隱藏」，使用者清除篩選即可拉回全部
+    // 不刪列！改用「L 欄(Store ID)空白即隱藏」總則(2026)：
+    // 比看 N 欄更穩——孤兒列(未排班者如 Kina Wu)N 欄常是公式算出的 #N/A(非真空白)，
+    // 只看 N 會漏；改看 L(店號)空白就隱藏並清空整列，#N/A 孤兒列不再露出。
+    const colL_idx = 12;          // L = Store ID
     const colN_idx = 14;
     const colM_idx = 13;
     const colYear_=7, colQuarter_=8, colWeek_=9;  // G/H/I 欄
+    const clearOrphanCols = [12,13,14,15,17,18,20,23]; // L M N O Q R T W
     const fnWeeks = new Set(); let fnYear=null, fnQuarter=null, firstDataMonth=null;
     for(let r=4; r<=ws.actualRowCount; r++){
-      const v = ws.getRow(r).getCell(colN_idx).value;
-      const s = (v && typeof v==='object' && 'result' in v) ? v.result : v;
-      const empty = (s===null || s===undefined || String(s).trim()==='');
-      ws.getRow(r).hidden = empty;   // 沒資料 → 隱藏(非刪除)
+      const lv = ws.getRow(r).getCell(colL_idx).value;
+      const ls = (lv && typeof lv==='object' && 'result' in lv) ? lv.result : lv;
+      const empty = (ls===null || ls===undefined || String(ls).trim()==='');
+      ws.getRow(r).hidden = empty;   // L 沒資料 → 隱藏(非刪除)
+      if(empty){ clearOrphanCols.forEach(c=>{ ws.getRow(r).getCell(c).value = null; }); }
       if(!empty){
         const wv=ws.getRow(r).getCell(colWeek_).value; if(wv) fnWeeks.add(String(wv).trim());
         if(fnYear===null){ const yv=ws.getRow(r).getCell(colYear_).value; if(yv) fnYear=parseInt(String(yv).replace(/\D/g,''),10); }
@@ -1057,7 +1062,7 @@ $('t2Export').addEventListener('click', async ()=>{
 
     const colName = tpl.col.name + 1;   // ExcelJS 是 1-based
     const colDate = tpl.col.date + 1;
-    const colL = 12, colN = 14, colO = 15, colQ = 17, colR_ = 18, colT = 20, colW = 23;
+    const colL = 12, colM = 13, colN = 14, colO = 15, colQ = 17, colR_ = 18, colT = 20, colW = 23;
 
     // 該月起訖
     const [yy,mm] = m.split('-').map(Number);
@@ -1131,7 +1136,7 @@ $('t2Export').addEventListener('click', async ()=>{
     // 隱藏其他人 + 清空其他人的舊資料（選項A：產出只有該人乾淨資料，Tab2 才不會誤判）
     const colDate2 = colDate;
     const lastR = ws.actualRowCount;
-    const clearCols = [colL, colN, colO, colQ, colR_, colT, colW]; // 12,14,15,17,18,20,23
+    const clearCols = [colL, colM, colN, colO, colQ, colR_, colT, colW]; // 12,13,14,15,17,18,20,23 (補 M 欄避免殘留 #N/A)
     for(let r=4; r<=lastR; r++){
       const row = ws.getRow(r);
       const nameVal = row.getCell(colName).value;
