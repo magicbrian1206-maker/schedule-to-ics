@@ -1139,19 +1139,10 @@ $('t2Export').addEventListener('click', async ()=>{
     const blob = new Blob([out], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    // 檔名：FY26Q3 W10-W13 ASC Scheduling by Brian
+    // 檔名 = 上傳範本原檔名 + " by 名字"
     const first = NAME_ALIAS[p] || p.split(/\s+/)[0];
-    const wkNums = [...weekSet].map(w=>parseInt(String(w).replace(/\D/g,''),10)).filter(n=>!isNaN(n)).sort((x,y)=>x-y);
-    const wkRange = wkNums.length ? (wkNums.length===1 ? `W${wkNums[0]}` : `W${wkNums[0]}-W${wkNums[wkNums.length-1]}`) : '';
-    // FY 算法：Apple 財年 = 月曆年的 10 月起算下一財年。範本通常已有 Year/Quarter 可直接用。
-    // FY label：取 Year 後兩碼；若月份>=10(Q1)則財年要+1
-    let fyLabel = 'FY';
-    if(fyYear){
-      const fyNum = (mm >= 10) ? (fyYear + 1) : fyYear;
-      fyLabel = 'FY' + String(fyNum).slice(-2);
-    }
-    const qLabel = fyQuarter || '';
-    a.download = `${fyLabel}${qLabel} ${wkRange} ASC Scheduling by ${first}.xlsx`;
+    const baseName = (tpl.fileName || 'Schedule').replace(/\.xlsx?$/i, '').trim();
+    a.download = `${baseName} by ${first}.xlsx`;
     a.click();
   }catch(err){
     console.error(err);
