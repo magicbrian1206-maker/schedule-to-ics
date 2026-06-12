@@ -552,20 +552,42 @@ $('dl').addEventListener('click', async ()=>{
     ws.dataValidations.add(`T4:T${lastR2}`, {type:'list', allowBlank:true, formulae:['"00,30"']});
     ws.dataValidations.add(`V4:V${lastR2}`, {type:'list', allowBlank:true, formulae:['"AM,PM"']});
 
-    // 只保留 L 欄(店號)有填的列 — 刪掉所有 L 欄空白的資料列
-    const colL_idx = 12;
+    // 改用 N 欄(Status)判斷該列是否要保留 — 比 L 欄(可能殘留公式) 可靠
+    const colN_idx = 14;
+    const colM_idx = 13;
     const rowsToDelete = [];
     for(let r=4; r<=ws.actualRowCount; r++){
-      const v = ws.getRow(r).getCell(colL_idx).value;
-      if(v===null || v===undefined || String(v).trim()==='') rowsToDelete.push(r);
+      const v = ws.getRow(r).getCell(colN_idx).value;
+      const s = (v && typeof v==='object' && 'result' in v) ? v.result : v;
+      if(s===null || s===undefined || String(s).trim()==='') rowsToDelete.push(r);
     }
-    // 從下往上刪，避免 row 號錯亂
     for(let i=rowsToDelete.length-1; i>=0; i--){
       ws.spliceRows(rowsToDelete[i], 1);
     }
-    // 重設 autoFilter 範圍到新的尾列
+
+    // 重新寫 M 欄 VLOOKUP 公式（之前因公式轉純值變成死的 #N/A）
+    const newLast = ws.actualRowCount;
+    for(let r=4; r<=newLast; r++){
+      ws.getRow(r).getCell(colM_idx).value = {
+        formula: `IFERROR(VLOOKUP(L${r},'店面ID和名称查询'!A:B,2,FALSE),"")`,
+        result: null
+      };
+    }
+
+    // 刪列後重設 autoFilter + N/O/Q/R/T/V 下拉到新範圍
     ws.autoFilter = null;
-    ws.autoFilter = { from:{row:2,column:1}, to:{row:ws.actualRowCount, column:23} };
+    ws.autoFilter = { from:{row:2,column:1}, to:{row:newLast, column:23} };
+    if(ws.dataValidations && ws.dataValidations.model){
+      Object.keys(ws.dataValidations.model).forEach(k=>delete ws.dataValidations.model[k]);
+    }
+    if(newLast >= 4){
+      ws.dataValidations.add(`N4:N${newLast}`, {type:'list', allowBlank:true, formulae:['"AL,SL,M,MT,PT,B,BT,CL,NP,OFF,RPH,All day in store,AM - Meeting/Training\\, PM - in store,AM - in store\\, PM - Meeting/Training,All day Meeting/Training,W/On Leave,On Leave/W,PH1,PH2,PH3,PH4,PH5,PH6,PH7,PH8,PH9,PH10,PH11,PH12,PH13,PH14,PH15,PH16"']});
+      ws.dataValidations.add(`O4:O${newLast}`, {type:'list', allowBlank:true, formulae:['"1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24"']});
+      ws.dataValidations.add(`R4:R${newLast}`, {type:'list', allowBlank:true, formulae:['"1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24"']});
+      ws.dataValidations.add(`Q4:Q${newLast}`, {type:'list', allowBlank:true, formulae:['"00,30"']});
+      ws.dataValidations.add(`T4:T${newLast}`, {type:'list', allowBlank:true, formulae:['"00,30"']});
+      ws.dataValidations.add(`V4:V${newLast}`, {type:'list', allowBlank:true, formulae:['"AM,PM"']});
+    }
 
     const out = await wb.xlsx.writeBuffer();
     const blob = new Blob([out],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
