@@ -387,7 +387,7 @@ $('dl').addEventListener('click', async ()=>{
     if(!ws) throw new Error('找不到工作表：'+base.sheet);
     const colName=base.col.name+1, colDate=base.col.date+1;
     const colF=6;  // F 欄 = ASC Name (中文)
-    const colL=12, colN=14, colO=15, colQ=17, colR_=18, colT=20;
+    const colL=12, colN=14, colO=15, colQ=17, colR_=18, colT=20, colW2=23;
 
     // 英文暱稱 → 中文 ASC Name 對照（用來把個人檔 E 欄英文名翻成底檔 F 欄中文名）
     const EN2CN = {
@@ -480,6 +480,7 @@ $('dl').addEventListener('click', async ()=>{
         setOrNull(colQ, row[16]);
         setOrNull(colR_, row[17]);
         setOrNull(colT, row[19]);
+        setOrNull(colW2, row[22]);  // W 欄(備註)也要搬
         stats.overwritten++;
         stats.addedPeople.add(cn);
       }
