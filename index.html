@@ -1043,6 +1043,8 @@ $('t2Export').addEventListener('click', async ()=>{
 
     let modifiedCount = 0;
     let firstRow = null;  // 該人該月第一列，給開檔時自動捲到
+    const weekSet = new Set();  // 收集該人該月的週次 (WK10..WK13) 給檔名
+    const colWeek = 9;          // I 欄 = Week
     ws.eachRow({includeEmpty:false}, (row, rNum)=>{
       if(rNum < 4) return; // header
       const nameVal = row.getCell(colName).value;
@@ -1062,6 +1064,8 @@ $('t2Export').addEventListener('click', async ()=>{
       if(!st) return;
 
       if(firstRow === null) firstRow = rNum;
+      const wk = row.getCell(colWeek).value;
+      if(wk) weekSet.add(String(wk).trim());
 
       // 寫入 N
       row.getCell(colN).value = st.status;
@@ -1096,37 +1100,48 @@ $('t2Export').addEventListener('click', async ()=>{
       return;
     }
 
-    // 最安全：完全不動其他列，只改該人該月的格子
-    // 產出檔 = 原檔 + 只有目標儲存格被改寫，其他 100% 不動
-    // 設定開檔時自動捲到目標列 + 選中第一格
-    if(firstRow){
-      ws.views = [{
-        state: 'normal',
-        topLeftCell: `A${Math.max(1, firstRow-1)}`,
-        activeCell: `A${firstRow}`,
-        showGridLines: true
-      }];
+    // 不刪列！改用「隱藏」其他人的列，使用者清除篩選即可拉回全部
+    const colDate2 = colDate;
+    const lastR = ws.actualRowCount;
+    for(let r=4; r<=lastR; r++){
+      const row = ws.getRow(r);
+      const nameVal = row.getCell(colName).value;
+      const nm = nameVal ? String(nameVal).trim() : '';
+      let keep = false;
+      if(nm === p){
+        const dv = row.getCell(colDate2).value;
+        let date=null;
+        if(dv instanceof Date) date=dv;
+        else if(typeof dv==='number') date=new Date(Math.round((dv-25569)*86400*1000));
+        else if(dv && dv.result instanceof Date) date=dv.result;
+        if(date && date>=monthStart && date<monthEnd) keep = true;
+      }
+      row.hidden = !keep;   // 非該人該月 → 隱藏（非刪除）
     }
 
-    // 補回 N 欄下拉清單 — ExcelJS 載入會丟失「範圍引用」型 dataValidation
-    // 引用原檔 Z6:Z39（清單來源），公式不能有 = 前綴
-    const lastRow2 = ws.actualRowCount;
-    for(let r=4; r<=lastRow2; r++){
-      ws.getCell(`N${r}`).dataValidation = {
-        type: 'list', allowBlank: true,
-        formulae: ['$Z$6:$Z$39']
-      };
-    }
-    // O/Q/R/T 的下拉（字串清單型）ExcelJS 通常會保留，不再手動補
+    const newLast = ws.actualRowCount;
+    // 開檔捲到該人第一列
+    ws.views = [{ state:'normal', topLeftCell:`A${Math.max(1,(firstRow||4)-1)}`, activeCell:`A${firstRow||4}`, showGridLines:true }];
 
-    // 欄寬：維持範本原檔（不覆寫）— 範本本來就是正確規格
+    // autoFilter + N 欄下拉維持
+    ws.autoFilter = null;
+    ws.autoFilter = { from:{row:2,column:1}, to:{row:newLast, column:23} };
+    if(ws.dataValidations && ws.dataValidations.model){
+      Object.keys(ws.dataValidations.model).forEach(k=>{ if(/^[NOQRTV]\d+$/.test(k)) delete ws.dataValidations.model[k]; });
+    }
+    for(let r=4; r<=newLast; r++){
+      ws.getCell(`N${r}`).dataValidation = { type:'list', allowBlank:true, formulae:['$Z$6:$Z$39'] };
+    }
 
     const out = await wb.xlsx.writeBuffer();
     const blob = new Blob([out], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
+    // 檔名：FY26Q3 W10-W13 ASC Scheduling by Brian
     const first = NAME_ALIAS[p] || p.split(/\s+/)[0];
-    a.download = `Schedule-${first}-${m}.xlsx`;
+    const wkNums = [...weekSet].map(w=>parseInt(String(w).replace(/\D/g,''),10)).filter(n=>!isNaN(n)).sort((x,y)=>x-y);
+    const wkRange = wkNums.length ? (wkNums.length===1 ? `W${wkNums[0]}` : `W${wkNums[0]}-W${wkNums[wkNums.length-1]}`) : '';
+    a.download = `FY26Q3 ${wkRange} ASC Scheduling by ${first}.xlsx`;
     a.click();
   }catch(err){
     console.error(err);
