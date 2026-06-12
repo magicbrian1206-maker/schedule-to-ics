@@ -546,12 +546,8 @@ $('dl').addEventListener('click', async ()=>{
     }
     // 重設乾淨的整欄 dataValidation
     const lastR2 = ws.rowCount;
-<<<<<<< Updated upstream
-    ws.dataValidations.add(`N4:N${lastR2}`, {type:'list', allowBlank:true, formulae:['$Z$6:$Z$39']});
-=======
     const zRangeT2 = writeStatusListToZ(ws);
     ws.dataValidations.add(`N4:N${lastR2}`, {type:'list', allowBlank:true, formulae:[`$Z$${zRangeT2.from}:$Z$${zRangeT2.to}`]});
->>>>>>> Stashed changes
     ws.dataValidations.add(`O4:O${lastR2}`, {type:'list', allowBlank:true, formulae:['"1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24"']});
     ws.dataValidations.add(`R4:R${lastR2}`, {type:'list', allowBlank:true, formulae:['"1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24"']});
     ws.dataValidations.add(`Q4:Q${lastR2}`, {type:'list', allowBlank:true, formulae:['"00,30"']});
@@ -574,6 +570,7 @@ $('dl').addEventListener('click', async ()=>{
       ws.getRow(r).hidden = empty;   // L 沒資料 → 隱藏(非刪除)
       if(empty){ clearOrphanCols.forEach(c=>{ ws.getRow(r).getCell(c).value = null; }); }
       if(!empty){
+        ws.getRow(r).getCell(colL_idx).alignment = { horizontal:'center', vertical:'middle' }; // L欄統一置中
         const wv=ws.getRow(r).getCell(colWeek_).value; if(wv) fnWeeks.add(String(wv).trim());
         if(fnYear===null){ const yv=ws.getRow(r).getCell(colYear_).value; if(yv) fnYear=parseInt(String(yv).replace(/\D/g,''),10); }
         if(fnQuarter===null){ const qv=ws.getRow(r).getCell(colQuarter_).value; if(qv) fnQuarter=String(qv).trim(); }
@@ -1126,6 +1123,8 @@ $('t2Export').addEventListener('click', async ()=>{
       }else{
         row.getCell(colL).value = null;
       }
+      // L 欄統一置中(範本 L 欄夾雜「靠右/置中」兩種格式→不統一會位置跑掉)
+      row.getCell(colL).alignment = { horizontal:'center', vertical:'middle' };
       // 工作類 → 寫時段；其他 → 清空
       if(NEEDS_TIME.has(st.status)){
         const [oH,qM] = st.start.split(':');
