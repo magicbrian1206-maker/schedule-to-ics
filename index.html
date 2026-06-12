@@ -386,7 +386,28 @@ $('dl').addEventListener('click', async ()=>{
     const ws = wb.getWorksheet(base.sheet);
     if(!ws) throw new Error('找不到工作表：'+base.sheet);
     const colName=base.col.name+1, colDate=base.col.date+1;
+    const colF=6;  // F 欄 = ASC Name (中文)
     const colL=12, colN=14, colO=15, colQ=17, colR_=18, colT=20;
+
+    // 英文暱稱 → 中文 ASC Name 對照（用來把個人檔 E 欄英文名翻成底檔 F 欄中文名）
+    const EN2CN = {
+      'Brian':'王裕平','Adam':'陳立夫','Kay':'陳凱雯','Vic':'陳億峻',
+      'Haidee':'周孟樺','Chou Meng Hua':'周孟樺',
+      'Daisy':'葉姿伶','Elay':'李怡叡','Emily':'陳欣伶','Jessie':'謝靜宜',
+      'Vincent':'陳弘駿','Kristin':'林嵐','Paty':'張許琪婷'
+    };
+    function resolveCN(engName, ascName){
+      // 1. 來源檔 F 欄已是中文 → 直接用
+      if(ascName && /[\u4e00-\u9fa5]/.test(String(ascName))) return String(ascName).trim();
+      // 2. 用 Eng Name 第一個字（first name）去查
+      if(engName){
+        const s = String(engName).trim();
+        if(EN2CN[s]) return EN2CN[s];
+        const first = s.split(/\s+/)[0];
+        if(EN2CN[first]) return EN2CN[first];
+      }
+      return null;
+    }
 
     // 攤平 shared formula 避免 row 操作時 master 不見
     ws.eachRow({includeEmpty:false}, row=>{
@@ -397,51 +418,55 @@ $('dl').addEventListener('click', async ()=>{
       });
     });
 
-    // 最笨最穩：第 1 檔當底，後續每檔的所有資料列(headerRow+1 起)整列 append 到末端
-    // 不比對人名、不 in-place 覆寫、不挑欄位 — 只要值跟樣式照搬
-    const stats = {files:loadedFiles.length, appended:0, addedPeople:new Set()};
+    // 新邏輯：第 1 檔當底（保留所有人完整列）→ 後續檔以 F 欄(中文 ASC Name)為主鍵，
+    // 在底檔找到同人同日的列 → in-place 覆寫 L/N/O/Q/R/T 六欄，欄位不跑掉
+    const stats = {files:loadedFiles.length, overwritten:0, skipped:0, addedPeople:new Set(), missPeople:new Set()};
+
+    // 預先建底檔索引：cnName + ymd → ExcelJS row
+    const baseIndex = new Map();
+    ws.eachRow({includeEmpty:false},(row,rNum)=>{
+      if(rNum<4) return;
+      const fv = row.getCell(colF).value;
+      const cn = fv ? String(fv).trim() : '';
+      if(!cn) return;
+      const dv = row.getCell(colDate).value;
+      let dt = null;
+      if(dv instanceof Date) dt=dv;
+      else if(typeof dv==='number') dt=new Date(Math.round((dv-25569)*86400*1000));
+      else if(dv && dv.result instanceof Date) dt=dv.result;
+      if(!dt) return;
+      baseIndex.set(cn+'|'+ymdDash(dt), row);
+    });
+
     for(let i=1; i<loadedFiles.length; i++){
       const src = loadedFiles[i];
+      const srcWb = XLSX.read(src.buffer,{cellDates:true});
+      const srcAoa = XLSX.utils.sheet_to_json(srcWb.Sheets[src.sheet],{header:1,defval:null,raw:true});
       const sc = src.col;
-      const srcWbXjs = new ExcelJS.Workbook();
-      await srcWbXjs.xlsx.load(src.buffer);
-      const srcWs = srcWbXjs.getWorksheet(src.sheet);
-      if(!srcWs) continue;
 
-      // 先把來源檔所有 shared formula 攤平成 normal formula，避免 clone 時 master 找不到
-      srcWs.eachRow({includeEmpty:false}, row=>{
-        row.eachCell({includeEmpty:false}, cell=>{
-          if(cell.formula && cell.model && cell.model.shareType==='shared'){
-            cell.value = {formula:cell.formula, result:cell.result};
-          }
-        });
-      });
+      for(let r=sc.headerRow+1; r<srcAoa.length; r++){
+        const row = srcAoa[r] || [];
+        const engName = row[sc.name];
+        const ascName = row[5]; // F 欄 (索引 5)
+        if(!engName) continue;
+        const cn = resolveCN(engName, ascName);
+        if(!cn){ stats.missPeople.add(String(engName).trim()); continue; }
 
-      const dataStartRow = sc.headerRow + 2;
-      const lastRow = srcWs.actualRowCount;
-      for(let r=dataStartRow; r<=lastRow; r++){
-        const srcRow = srcWs.getRow(r);
-        let hasAny = false;
-        srcRow.eachCell({includeEmpty:false}, ()=>{ hasAny = true; });
-        if(!hasAny) continue;
+        const date = excelDate(row[sc.date]);
+        if(!date) continue;
 
-        const newRow = ws.addRow([]);
-        srcRow.eachCell({includeEmpty:true},(cell, colNumber)=>{
-          const nc = newRow.getCell(colNumber);
-          let v = cell.value;
-          // 公式 → 直接寫結果值（避免任何 shared/cross-sheet ref 問題）
-          if(v && typeof v === 'object' && 'formula' in v){
-            v = ('result' in v) ? v.result : null;
-          }
-          if(v !== null && v !== undefined) nc.value = v;
-          if(cell.style) { try{ nc.style = JSON.parse(JSON.stringify(cell.style)); }catch(e){} }
-          if(cell.numFmt) nc.numFmt = cell.numFmt;
-        });
-        if(srcRow.height) newRow.height = srcRow.height;
+        const targetRow = baseIndex.get(cn+'|'+ymdDash(date));
+        if(!targetRow){ stats.skipped++; continue; }
 
-        const nv = srcRow.getCell(colName).value;
-        if(nv) stats.addedPeople.add(String(nv).trim());
-        stats.appended++;
+        const setOrNull=(c,v)=>{ targetRow.getCell(c).value = (v==null||v==='')?null:v; };
+        setOrNull(colL, row[11]);
+        setOrNull(colN, row[13]);
+        setOrNull(colO, row[14]);
+        setOrNull(colQ, row[16]);
+        setOrNull(colR_, row[17]);
+        setOrNull(colT, row[19]);
+        stats.overwritten++;
+        stats.addedPeople.add(cn);
       }
     }
 
@@ -514,12 +539,14 @@ $('dl').addEventListener('click', async ()=>{
     a.download = `Schedule-Integrated.xlsx`;
     a.click();
     // 合併報告（嚴禁 silent skip）
-    const msg = `✅ 合併完成\n\n` +
-      `📦 檔案數：${stats.files}\n` +
-      `➕ 新增列：${stats.appended}\n` +
-      `👥 涵蓋人員：${[...stats.addedPeople].join('、')||'無'}`;
-    $('fileinfo').textContent = `已產出 • 新增 ${stats.appended} 列 / ${stats.addedPeople.size} 人`;
-    alert(msg);
+    const lines = [`✅ 合併完成`, ``,
+      `📦 檔案數：${stats.files}`,
+      `✏️ 覆寫列：${stats.overwritten}`,
+      `👥 涵蓋人員：${[...stats.addedPeople].join('、')||'無'}`];
+    if(stats.skipped>0) lines.push(`⚠️ 找不到對應列（同人同日）：${stats.skipped} 筆`);
+    if(stats.missPeople.size>0) lines.push(`❌ Eng Name 對不到中文：${[...stats.missPeople].join('、')}`);
+    $('fileinfo').textContent = `已產出 • 覆寫 ${stats.overwritten} 列 / ${stats.addedPeople.size} 人`;
+    alert(lines.join('\n'));
   }catch(err){
     console.error(err);
     alert('整合失敗：'+err.message);
