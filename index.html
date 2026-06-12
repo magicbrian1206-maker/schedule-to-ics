@@ -437,6 +437,47 @@ $('dl').addEventListener('click', async ()=>{
       }
     }
 
+    // 依 D 欄(EEID)數字由小到大排序資料區（row 4 起）
+    // 抽出數字部分排序，避免 "EE229698" 這種字串造成怪順序
+    const sortStart = 4;
+    const sortEnd = ws.actualRowCount;
+    if(sortEnd >= sortStart){
+      const snapshot = [];
+      for(let r=sortStart; r<=sortEnd; r++){
+        const row = ws.getRow(r);
+        const cells = {};
+        row.eachCell({includeEmpty:true},(cell, colNumber)=>{
+          cells[colNumber] = {
+            value: cell.value,
+            style: cell.style ? JSON.parse(JSON.stringify(cell.style)) : null,
+            numFmt: cell.numFmt || null
+          };
+        });
+        const dRaw = row.getCell(4).value;
+        const dStr = (dRaw && typeof dRaw === 'object' && 'result' in dRaw) ? String(dRaw.result||'') : String(dRaw||'');
+        const dNum = parseInt(dStr.replace(/\D/g,''),10);
+        snapshot.push({sortKey: isNaN(dNum)?Number.MAX_SAFE_INTEGER:dNum, height: row.height, cells});
+      }
+      snapshot.sort((a,b)=>a.sortKey - b.sortKey);
+      // 寫回
+      for(let i=0; i<snapshot.length; i++){
+        const r = sortStart + i;
+        const row = ws.getRow(r);
+        const snap = snapshot[i];
+        // 清掉舊值
+        row.eachCell({includeEmpty:true},(cell)=>{ cell.value = null; });
+        Object.keys(snap.cells).forEach(colNumber=>{
+          const c = row.getCell(Number(colNumber));
+          const s = snap.cells[colNumber];
+          if(s.value !== null && s.value !== undefined) c.value = s.value;
+          if(s.style) { try{ c.style = s.style; }catch(e){} }
+          if(s.numFmt) c.numFmt = s.numFmt;
+        });
+        if(snap.height) row.height = snap.height;
+        row.commit && row.commit();
+      }
+    }
+
     // 清掉所有資料區欄位的 cell 級 dataValidation（ExcelJS 載入時把整欄展開成數百萬 cell，輸出時拆成重疊段）
     if(ws.dataValidations && ws.dataValidations.model){
       const keys=Object.keys(ws.dataValidations.model);
