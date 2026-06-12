@@ -397,82 +397,43 @@ $('dl').addEventListener('click', async ()=>{
       });
     });
 
-    // 收集其他檔的「已編輯人員」→ 在底檔對應列(同名+同日)覆寫 L/N/O/Q/R/T
-    // 鐵律：底檔有該人 → in-place 覆寫；底檔沒有該人（個人單檔合併）→ append 整塊列含樣式
-    const stats = {files:loadedFiles.length, overwritten:0, appended:0, addedPeople:new Set(), overwritePeople:new Set()};
+    // 最笨最穩：第 1 檔當底，後續每檔的所有資料列(headerRow+1 起)整列 append 到末端
+    // 不比對人名、不 in-place 覆寫、不挑欄位 — 只要值跟樣式照搬
+    const stats = {files:loadedFiles.length, appended:0, addedPeople:new Set()};
     for(let i=1; i<loadedFiles.length; i++){
       const src = loadedFiles[i];
-      const srcWb = XLSX.read(src.buffer,{cellDates:true});
-      const srcAoa = XLSX.utils.sheet_to_json(srcWb.Sheets[src.sheet],{header:1,defval:null,raw:true});
       const sc = src.col;
-      // 也用 ExcelJS 載入來源檔，方便連同樣式/欄寬 append
       const srcWbXjs = new ExcelJS.Workbook();
       await srcWbXjs.xlsx.load(src.buffer);
       const srcWs = srcWbXjs.getWorksheet(src.sheet);
+      if(!srcWs) continue;
 
-      // 找該檔「真正有填東西的人」(L 或 N 任一欄非空)
-      const editedPeople = new Set();
-      for(let r=sc.headerRow+1;r<srcAoa.length;r++){
-        const row=srcAoa[r]||[];
-        const nm=row[sc.name];
-        if(!nm) continue;
-        if(row[12]!=null || row[13]!=null || row[14]!=null) editedPeople.add(String(nm).trim());
-      }
-      // 對每個被編輯的人決定要 in-place 覆寫 還是 append
-      // 先檢查底檔是否已有該人
-      const baseHasPerson = new Map();
-      editedPeople.forEach(nm=>{
-        let has=false;
-        ws.eachRow({includeEmpty:false},(row,rNum)=>{
-          if(has||rNum<4) return;
-          const nv=row.getCell(colName).value;
-          if(nv && String(nv).trim()===nm) has=true;
+      const dataStartRow = sc.headerRow + 2; // headerRow 0-based; ExcelJS 1-based, 資料起始 = headerRow+2
+      const lastRow = srcWs.actualRowCount;
+      for(let r=dataStartRow; r<=lastRow; r++){
+        const srcRow = srcWs.getRow(r);
+        // 跳完全空的列
+        let hasAny = false;
+        srcRow.eachCell({includeEmpty:false}, ()=>{ hasAny = true; });
+        if(!hasAny) continue;
+
+        const newRow = ws.addRow([]);
+        srcRow.eachCell({includeEmpty:true},(cell, colNumber)=>{
+          const nc = newRow.getCell(colNumber);
+          if(cell.formula && cell.model && cell.model.shareType==='shared'){
+            nc.value = {formula:cell.formula, result:cell.result};
+          } else if(cell.value !== null && cell.value !== undefined){
+            nc.value = cell.value;
+          }
+          if(cell.style) { try{ nc.style = JSON.parse(JSON.stringify(cell.style)); }catch(e){} }
+          if(cell.numFmt) nc.numFmt = cell.numFmt;
         });
-        baseHasPerson.set(nm, has);
-      });
+        if(srcRow.height) newRow.height = srcRow.height;
 
-      for(let r=sc.headerRow+1;r<srcAoa.length;r++){
-        const row=srcAoa[r]||[];
-        const nm=row[sc.name];
-        if(!nm) continue;
-        const nameT = String(nm).trim();
-        if(!editedPeople.has(nameT)) continue;
-        const date=excelDate(row[sc.date]);
-        if(!date) continue;
-
-        if(baseHasPerson.get(nameT)){
-          // 底檔已有 → in-place 覆寫 L/N/O/Q/R/T
-          const targetRow = findRow(ws, colName, colDate, nameT, date);
-          if(!targetRow) continue;
-          const setOrNull=(c,v)=>{ targetRow.getCell(c).value = (v==null||v==='')?null:v; };
-          setOrNull(colL, row[11]);
-          setOrNull(colN, row[13]);
-          setOrNull(colO, row[14]);
-          setOrNull(colQ, row[16]);
-          setOrNull(colR_, row[17]);
-          setOrNull(colT, row[19]);
-          stats.overwritten++;
-          stats.overwritePeople.add(nameT);
-        } else {
-          // 底檔沒有 → append 整塊列（含樣式）到底檔末端
-          const srcRowNum = r + 1; // aoa 0-based → ExcelJS 1-based
-          const srcRow = srcWs.getRow(srcRowNum);
-          const newRow = ws.addRow([]);
-          srcRow.eachCell({includeEmpty:true},(cell, colNumber)=>{
-            const nc = newRow.getCell(colNumber);
-            // 攤平 shared formula
-            if(cell.formula && cell.model && cell.model.shareType==='shared'){
-              nc.value = {formula:cell.formula, result:cell.result};
-            } else {
-              nc.value = cell.value;
-            }
-            if(cell.style) nc.style = JSON.parse(JSON.stringify(cell.style));
-            if(cell.numFmt) nc.numFmt = cell.numFmt;
-          });
-          if(srcRow.height) newRow.height = srcRow.height;
-          stats.appended++;
-          stats.addedPeople.add(nameT);
-        }
+        // 蒐集 Eng Name 用來報告
+        const nv = srcRow.getCell(colName).value;
+        if(nv) stats.addedPeople.add(String(nv).trim());
+        stats.appended++;
       }
     }
 
@@ -500,15 +461,11 @@ $('dl').addEventListener('click', async ()=>{
     a.download = `Schedule-Integrated.xlsx`;
     a.click();
     // 合併報告（嚴禁 silent skip）
-    const skipped = [];
-    loadedFiles.slice(1).forEach(f=>{
-      if(!stats.overwritePeople.size && !stats.addedPeople.size) skipped.push(f.name);
-    });
     const msg = `✅ 合併完成\n\n` +
       `📦 檔案數：${stats.files}\n` +
-      `✏️ 覆寫列：${stats.overwritten}（${[...stats.overwritePeople].join('、')||'無'}）\n` +
-      `➕ 新增列：${stats.appended}（${[...stats.addedPeople].join('、')||'無'}）`;
-    $('fileinfo').textContent = `已產出 • 覆寫 ${stats.overwritten} 列 / 新增 ${stats.appended} 列`;
+      `➕ 新增列：${stats.appended}\n` +
+      `👥 涵蓋人員：${[...stats.addedPeople].join('、')||'無'}`;
+    $('fileinfo').textContent = `已產出 • 新增 ${stats.appended} 列 / ${stats.addedPeople.size} 人`;
     alert(msg);
   }catch(err){
     console.error(err);
