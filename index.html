@@ -3,7 +3,10 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>排班工具箱</title>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="0" />
+<title>排班工具箱 v2026.06.12.2030</title>
 <meta name="description" content="排班 Excel ↔ 行事曆/個人班表產生器，純前端，資料不離開瀏覽器。" />
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
@@ -69,6 +72,26 @@
   .day.s-rph{background:#1f1d3a}
   .legend{font-size:11.5px;color:var(--mute);margin-top:8px;line-height:1.7}
 </style>
+<script>
+/* ===== 版本自動更新偵測(一勞永逸,解決 Safari 死咬舊快取) ===== */
+window.__APP_VERSION__='2026.06.12.2030';
+(function(){
+  // 用 sessionStorage 避免無限重載:每個分頁只自動清一次
+  try{
+    fetch('./index.html?__v='+Date.now(),{cache:'no-store'}).then(r=>r.text()).then(t=>{
+      var m=t.match(/__APP_VERSION__='([^']+)'/);
+      var latest=m?m[1]:null;
+      if(latest && latest!==window.__APP_VERSION__ && !sessionStorage.getItem('__reloaded_'+latest)){
+        sessionStorage.setItem('__reloaded_'+latest,'1');
+        // 清掉所有快取 + SW 後硬重載
+        if(window.caches) caches.keys().then(ks=>Promise.all(ks.map(k=>caches.delete(k)))).then(()=>location.reload(true));
+        else location.reload(true);
+        if(navigator.serviceWorker) navigator.serviceWorker.getRegistrations().then(rs=>rs.forEach(r=>r.unregister()));
+      }
+    }).catch(()=>{});
+  }catch(e){}
+})();
+</script>
 </head>
 <body>
 
@@ -81,7 +104,7 @@
 <section id="t1" class="tabpanel">
 <header>
   <div>
-    <h1>📊 班表整合系統</h1>
+    <h1>📊 班表整合系統 <span style="font-size:12px;color:#888;font-weight:normal">v2026.06.12.2030</span></h1>
     <div class="sub" id="fileinfo">拖入多份 ASC 班表 → 預覽休假 + 產出整合版 Excel</div>
   </div>
   <div style="display:flex;gap:8px">
@@ -115,7 +138,7 @@
 <section id="t2" class="tabpanel show">
 <header>
   <div>
-    <h1>📝 個人班表產生器</h1>
+    <h1>📝 個人班表產生器 <span style="font-size:12px;color:#888;font-weight:normal">v2026.06.12.2030</span></h1>
     <div class="sub" id="t2info">選人 → 選月份 → 點每天的狀態 → 產出單人 Excel</div>
   </div>
   <div style="display:flex;gap:8px">
