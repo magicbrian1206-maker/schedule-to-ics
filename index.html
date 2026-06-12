@@ -684,11 +684,18 @@ const NAME_ALIAS = {'Chou Meng Hua':'Haidee'}; // Excel 名 → 顯示用 First
 // 寫進儲存格範圍就不會被逗號影響。
 function writeStatusListToZ(ws){
   const vals = STATUS_OPTIONS.map(o=>o.v).filter(v=>v && v!=='\uF8FF'); // 去掉 Apple logo 特殊字
-  const start = 6;
-  for(let i=0;i<vals.length;i++){ ws.getCell('Z'+(start+i)).value = vals[i]; }
-  // 清掉殘留(避免上次更長)
-  for(let i=vals.length;i<60;i++){ const c=ws.getCell('Z'+(start+i)); if(c.value!=null) c.value=null; }
-  return { from:start, to:start+vals.length-1 }; // e.g. Z6:Z40
+  // ★ 關鍵:清單必須寫在「資料列範圍之外」。
+  //   若寫在資料列(如 Z6..)，那些列的 L 欄空白會被「L空白即隱藏」邏輯隱藏，
+  //   導致 N 欄下拉來源指向隱藏列 → Excel 讓下拉失效(這就是 N 欄不能拉的真因)。
+  //   改寫到資料最後一列之後(rowCount+2 起)，隱藏迴圈(只到 rowCount)掃不到，下拉來源永遠可見。
+  const oldStart = 6; // 清掉舊版可能殘留在 Z6.. 的清單
+  for(let i=0;i<60;i++){ const c=ws.getCell('Z'+(oldStart+i)); if(c.value!=null) c.value=null; }
+  const start = ws.rowCount + 2;
+  for(let i=0;i<vals.length;i++){
+    ws.getCell('Z'+(start+i)).value = vals[i];
+    ws.getRow(start+i).hidden = false; // 確保可見
+  }
+  return { from:start, to:start+vals.length-1 };
 }
 const STATUS_OPTIONS = [
   {v:'All day in store', g:'work'},
