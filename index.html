@@ -530,6 +530,11 @@ $('dl').addEventListener('click', async ()=>{
       }
     }
 
+    // 清掉舊的 autoFilter 跟所有 row hidden（避免 Excel 開檔時隱藏資料），再重設一次乾淨的
+    ws.autoFilter = null;
+    ws.eachRow({includeEmpty:false}, row=>{ if(row.hidden) row.hidden = false; });
+    ws.autoFilter = { from:{row:2,column:1}, to:{row:ws.actualRowCount, column:23} };
+
     // 清掉所有資料區欄位的 cell 級 dataValidation（ExcelJS 載入時把整欄展開成數百萬 cell，輸出時拆成重疊段）
     if(ws.dataValidations && ws.dataValidations.model){
       const keys=Object.keys(ws.dataValidations.model);
