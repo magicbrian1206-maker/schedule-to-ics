@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>排班工具箱 v2026.06.13.1355</title>
+<title>排班工具箱 v2026.06.13.1330</title>
 <meta name="description" content="排班 Excel ↔ 行事曆/個人班表產生器，純前端，資料不離開瀏覽器。" />
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
@@ -106,7 +106,7 @@ window.__APP_VERSION__='2026.06.12.2100';
 <section id="t1" class="tabpanel">
 <header>
   <div>
-    <h1>📊 班表整合系統 <span style="font-size:12px;color:#888;font-weight:normal">v2026.06.13.1355</span></h1>
+    <h1>📊 班表整合系統 <span style="font-size:12px;color:#888;font-weight:normal">v2026.06.13.1330</span></h1>
     <div class="sub" id="fileinfo">拖入多份 ASC 班表 → 預覽休假 + 產出整合版 Excel</div>
   </div>
   <div style="display:flex;gap:8px">
@@ -140,7 +140,7 @@ window.__APP_VERSION__='2026.06.12.2100';
 <section id="t2" class="tabpanel show">
 <header>
   <div>
-    <h1>📝 個人班表產生器 <span style="font-size:12px;color:#888;font-weight:normal">v2026.06.13.1355</span></h1>
+    <h1>📝 個人班表產生器 <span style="font-size:12px;color:#888;font-weight:normal">v2026.06.13.1330</span></h1>
     <div class="sub" id="t2info">選人 → 選月份 → 點每天的狀態 → 產出單人 Excel</div>
   </div>
   <div style="display:flex;gap:8px">
@@ -196,9 +196,6 @@ const LEAVE_INFO = {
   'W/On Leave':{cls:'O',label:'上班/下午假'}, 'On Leave/W':{cls:'O',label:'上午假/下班'},
   'RPH':{cls:'RPH',label:'例休補休'},
   '上班':{cls:'AL',label:'國定假日上班'},
-  'All day Meeting/Training':{cls:'MEET',label:'All day'},
-  'AM - Meeting/Training, PM - in store':{cls:'MEET',label:'AM'},
-  'AM - in store, PM - Meeting/Training':{cls:'MEET',label:'PM'},
   'PH1':{cls:'PH',label:'PH1'},'PH2':{cls:'PH',label:'PH2'},'PH3':{cls:'PH',label:'PH3'},
   'PH4':{cls:'PH',label:'PH4'},'PH5':{cls:'PH',label:'PH5'},'PH6':{cls:'PH',label:'PH6'},
   'PH7':{cls:'PH',label:'PH7'},'PH8':{cls:'PH',label:'PH8'},'PH9':{cls:'PH',label:'PH9'},
@@ -263,6 +260,7 @@ async function parseFile(file){
       if(!name||!date||!st) continue;
       const stT=String(st).trim();
       if(stT==='All day in store'){work.push({name:String(name).trim(),date,status:stT});continue}
+      if(WORK_STATUS.has(stT)) continue;
       if(!LEAVE_INFO[stT]) continue;
       ev.push({name:String(name).trim(),date,status:stT});
     }
@@ -373,7 +371,7 @@ function render(){
   const byP={};filtered.forEach(e=>{(byP[e.name]=byP[e.name]||[]).push(e)});
   const cards=Object.keys(byP).sort().map(name=>{
     const list=byP[name];
-    const sorted=[...list].filter(e=>(LEAVE_INFO[e.status]||{}).cls!=='MEET').sort((a,b)=>a.date-b.date);
+    const sorted=[...list].sort((a,b)=>a.date-b.date);
     const longSet=new Set();
     let runStart=0;
     for(let i=1;i<=sorted.length;i++){
@@ -390,7 +388,7 @@ function render(){
     }
     const inner=list.map(e=>{
       const info=LEAVE_INFO[e.status]||{cls:'O',label:''};
-      const code=e.status==='\uF8FF'?'Apple':(info.cls==='MEET'?info.label:e.status);
+      const code=e.status==='\uF8FF'?'Apple':e.status;
       const isLong = longSet.has(ymdDash(e.date));
       return `<div class="row${isLong?' long':''}"><span>${ymdDash(e.date).slice(5)} (${wkCh[e.date.getDay()]})</span><span class="pill ${info.cls}" style="font-size:11px;padding:1px 6px">${code}</span></div>`;
     }).join('');
