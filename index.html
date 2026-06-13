@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>排班工具箱 v2026.06.12.2100</title>
+<title>排班工具箱 v2026.06.13.1330</title>
 <meta name="description" content="排班 Excel ↔ 行事曆/個人班表產生器，純前端，資料不離開瀏覽器。" />
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
@@ -60,6 +60,8 @@
   /* 個人班表 grid */
   .cal{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
   .cal .head{text-align:center;font-size:12px;color:var(--mute);padding:6px 0;font-weight:600}
+  .cal .head.sun{color:#ff6b6b}
+  .cal .head.sat{color:#5b9dff}
   .day{background:#1a1e25;border:1px solid var(--bd);border-radius:8px;padding:8px;min-height:96px;font-size:12px;display:flex;flex-direction:column;gap:4px}
   .day.empty{background:transparent;border:1px dashed #2c313a}
   .day .date{font-weight:600;color:#cfd3d8;font-size:13px}
@@ -104,7 +106,7 @@ window.__APP_VERSION__='2026.06.12.2100';
 <section id="t1" class="tabpanel">
 <header>
   <div>
-    <h1>📊 班表整合系統 <span style="font-size:12px;color:#888;font-weight:normal">v2026.06.12.2100</span></h1>
+    <h1>📊 班表整合系統 <span style="font-size:12px;color:#888;font-weight:normal">v2026.06.13.1330</span></h1>
     <div class="sub" id="fileinfo">拖入多份 ASC 班表 → 預覽休假 + 產出整合版 Excel</div>
   </div>
   <div style="display:flex;gap:8px">
@@ -138,7 +140,7 @@ window.__APP_VERSION__='2026.06.12.2100';
 <section id="t2" class="tabpanel show">
 <header>
   <div>
-    <h1>📝 個人班表產生器 <span style="font-size:12px;color:#888;font-weight:normal">v2026.06.12.2100</span></h1>
+    <h1>📝 個人班表產生器 <span style="font-size:12px;color:#888;font-weight:normal">v2026.06.13.1330</span></h1>
     <div class="sub" id="t2info">選人 → 選月份 → 點每天的狀態 → 產出單人 Excel</div>
   </div>
   <div style="display:flex;gap:8px">
@@ -172,8 +174,7 @@ window.__APP_VERSION__='2026.06.12.2100';
         <span class="pill MEET">Meeting</span> 會議/訓練 ·
         <span class="pill PH">PH</span> 國定假 ·
         <span class="pill AL">AL/SL</span> 請假 ·
-        <span class="pill O">OFF</span> 公休／其他 ·
-        預設時段：Vic/Brian/Vincent/Jessie/Daisy/Kristin = 12:00–21:00；其他 = 12:30–21:30
+        <span class="pill O">OFF</span> 公休／其他
       </div>
     </div>
   </section>
@@ -925,7 +926,7 @@ function renderCalendar(){
   const first=new Date(y,mm-1,1);
   const lastDate=new Date(y,mm,0).getDate();
   const startWk=first.getDay();
-  let html=['日','一','二','三','四','五','六'].map(w=>`<div class="head">${w}</div>`).join('');
+  let html=['日','一','二','三','四','五','六'].map((w,i)=>`<div class="head${i===0?' sun':i===6?' sat':''}">${w}</div>`).join('');
   for(let i=0;i<startWk;i++) html+=`<div class="day empty"></div>`;
   for(let d=1;d<=lastDate;d++){
     const dt=new Date(y,mm-1,d);
