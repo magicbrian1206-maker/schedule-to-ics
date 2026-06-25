@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>排班工具箱 v2026.06.13.1330</title>
+<title>排班工具箱 v2026.06.13.1400</title>
 <meta name="description" content="排班 Excel ↔ 行事曆/個人班表產生器，純前端，資料不離開瀏覽器。" />
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
@@ -76,7 +76,7 @@
 </style>
 <script>
 /* ===== 版本自動更新偵測(一勞永逸,解決 Safari 死咬舊快取) ===== */
-window.__APP_VERSION__='2026.06.12.2100';
+window.__APP_VERSION__='2026.06.13.1400';
 (function(){
   // 用 sessionStorage 避免無限重載:每個分頁只自動清一次
   try{
@@ -106,7 +106,7 @@ window.__APP_VERSION__='2026.06.12.2100';
 <section id="t1" class="tabpanel">
 <header>
   <div>
-    <h1>📊 班表整合系統 <span style="font-size:12px;color:#888;font-weight:normal">v2026.06.13.1330</span></h1>
+    <h1>📊 班表整合系統 <span style="font-size:12px;color:#888;font-weight:normal">v2026.06.13.1400</span></h1>
     <div class="sub" id="fileinfo">拖入多份 ASC 班表 → 預覽休假 + 產出整合版 Excel</div>
   </div>
   <div style="display:flex;gap:8px">
@@ -140,8 +140,8 @@ window.__APP_VERSION__='2026.06.12.2100';
 <section id="t2" class="tabpanel show">
 <header>
   <div>
-    <h1>📝 個人班表產生器 <span style="font-size:12px;color:#888;font-weight:normal">v2026.06.13.1330</span></h1>
-    <div class="sub" id="t2info">選人 → 選月份 → 點每天的狀態 → 產出單人 Excel</div>
+    <h1>📝 個人班表產生器 <span style="font-size:12px;color:#888;font-weight:normal">v2026.06.13.1400</span></h1>
+    <div class="sub" id="t2info">選人 → 點每天的狀態 → 產出單人 Excel</div>
   </div>
   <div style="display:flex;gap:8px">
     <button class="ghost" id="t2ResetTpl" hidden>清除範本</button>
@@ -162,9 +162,9 @@ window.__APP_VERSION__='2026.06.12.2100';
     <div class="card">
       <div class="toolbar">
         <select id="t2Person" style="min-width:180px"></select>
-        <select id="t2Month" style="min-width:140px"></select>
-        <button class="ghost" id="t2BulkInStore">全月設為 in store</button>
-        <select id="t2BulkStore" style="min-width:220px"><option value="">— 一鍵套用全月店號 —</option></select>
+        <span class="sub" id="t2Range" style="font-weight:600;color:#cfd3d8"></span>
+        <button class="ghost" id="t2BulkInStore">全部設為 in store</button>
+        <select id="t2BulkStore" style="min-width:220px"><option value="">— 一鍵套用全部店號 —</option></select>
         <div style="flex:1"></div>
         <span class="sub" id="t2TplInfo"></span>
       </div>
@@ -740,8 +740,20 @@ const STATUS_OPTIONS = [
 const NEEDS_TIME = new Set(['All day in store','AM - Meeting/Training, PM - in store',
   'AM - in store, PM - Meeting/Training','All day Meeting/Training']);
 
-let tpl = null; // { workbookBuffer, sheetName, headerRow, colMap, rows, people, months, stores }
+let tpl = null; // { workbookBuffer, sheetName, headerRow, colMap, rows, people, months, stores, dateMin, dateMax }
 let editState = {}; // key=`${person}|${YYYY-MM-DD}` => {status, start:'12:00', end:'21:00', storeId:''}
+
+// 由範本所有資料列算出實際日期範圍（檔名對應的整段班表，例如 5/31–6/27）
+function dateRange(rows){
+  const ts=rows.map(r=>r.date.getTime());
+  if(!ts.length) return {dateMin:null,dateMax:null};
+  return {dateMin:new Date(Math.min(...ts)), dateMax:new Date(Math.max(...ts))};
+}
+// 範圍中文標籤，例 "5/31 – 6/27"
+function rangeLabel(){
+  if(!tpl||!tpl.dateMin) return '';
+  return `${tpl.dateMin.getMonth()+1}/${tpl.dateMin.getDate()} – ${tpl.dateMax.getMonth()+1}/${tpl.dateMax.getDate()}`;
+}
 
 function defaultTime(name){
   const first=String(name||'').split(/\s+/)[0];
@@ -818,7 +830,7 @@ async function loadTemplate(file){
       col:pickCol, fileName:file.name, savedAt:Date.now()
     }));
     tpl={buffer:buf, sheet:pickSheet, headerRow:pickCol.headerRow, col:pickCol,
-         rows, people, months, stores, fileName:file.name};
+         rows, people, months, stores, fileName:file.name, ...dateRange(rows)};
     enterEditor();
   }catch(err){
     console.error(err);
@@ -856,7 +868,7 @@ async function loadTemplateFromStorage(){
     const people=[...new Set(rows.map(r=>r.name))].sort();
     const months=[...new Set(rows.map(r=>`${r.date.getFullYear()}-${pad(r.date.getMonth()+1)}`))].sort();
     const stores=extractStores(wb);
-    tpl={buffer:buf,sheet:meta.sheet,headerRow:col.headerRow,col,rows,people,months,stores,fileName:meta.fileName};
+    tpl={buffer:buf,sheet:meta.sheet,headerRow:col.headerRow,col,rows,people,months,stores,fileName:meta.fileName,...dateRange(rows)};
     return true;
   }catch(e){console.error(e);localStorage.removeItem(TPL_KEY);return false}
 }
@@ -867,7 +879,7 @@ function enterEditor(){
   $('t2Export').hidden=false;
   $('t2ExportICS').hidden=false;
   $('t2ResetTpl').hidden=false;
-  $('t2info').textContent=`範本：${tpl.fileName} • ${tpl.people.length} 人 / ${tpl.months.length} 個月`;
+  $('t2info').textContent=`範本：${tpl.fileName} • ${tpl.people.length} 人 • ${rangeLabel()}`;
   $('t2TplInfo').textContent=`${tpl.rows.length} 列資料`;
   // 只保留指定的 12 位（依 First name 比對；Chou Meng Hua → Haidee）
   const filteredPeople = tpl.people.filter(n=>{
@@ -878,11 +890,9 @@ function enterEditor(){
     const first = NAME_ALIAS[p] || p.split(/\s+/)[0];
     return `<option value="${p}">${first}（${p}）</option>`;
   }).join('');
-  $('t2Month').innerHTML=tpl.months.map(m=>{
-    const [y,mm]=m.split('-');return `<option value="${m}">${y} 年 ${parseInt(mm)} 月</option>`
-  }).join('');
+  $('t2Range').textContent=`📅 ${rangeLabel()}`;
   // 填店號 bulk 選單
-  $('t2BulkStore').innerHTML='<option value="">— 一鍵套用全月店號 —</option>'+
+  $('t2BulkStore').innerHTML='<option value="">— 一鍵套用全部店號 —</option>'+
     tpl.stores.map(s=>`<option value="${s.id}">${s.id} ${s.name}</option>`).join('');
   // 載入該人該月既有資料當預設
   loadExistingIntoState();
@@ -890,13 +900,13 @@ function enterEditor(){
 }
 
 function loadExistingIntoState(){
-  const p=$('t2Person').value, m=$('t2Month').value;
+  const p=$('t2Person').value;
   const dt=defaultTime(p);
   // 該人預設店：取該人在範本內出現過最頻繁的 storeId
   const storeFreq={};
   tpl.rows.filter(r=>r.name===p && r.l).forEach(r=>{storeFreq[r.l]=(storeFreq[r.l]||0)+1});
   const defaultStore=Object.keys(storeFreq).sort((a,b)=>storeFreq[b]-storeFreq[a])[0]||'';
-  tpl.rows.filter(r=>r.name===p && `${r.date.getFullYear()}-${pad(r.date.getMonth()+1)}`===m)
+  tpl.rows.filter(r=>r.name===p)
     .forEach(r=>{
       const k=`${p}|${ymdDash(r.date)}`;
       const wd=r.date.getDay();
@@ -916,23 +926,23 @@ function loadExistingIntoState(){
 }
 
 function renderCalendar(){
-  const p=$('t2Person').value, m=$('t2Month').value;
-  if(!p||!m){$('t2Cal').innerHTML='';return}
+  const p=$('t2Person').value;
+  if(!p||!tpl||!tpl.dateMin){$('t2Cal').innerHTML='';return}
   // 取該人預設店
   const storeFreq={};
   tpl.rows.filter(r=>r.name===p && r.l).forEach(r=>{storeFreq[r.l]=(storeFreq[r.l]||0)+1});
   const defaultStore=Object.keys(storeFreq).sort((a,b)=>storeFreq[b]-storeFreq[a])[0]||'';
-  const [y,mm]=m.split('-').map(Number);
-  const first=new Date(y,mm-1,1);
-  const lastDate=new Date(y,mm,0).getDate();
-  const startWk=first.getDay();
+  // 範圍 = 範本實際日期（檔名對應整段，例 5/31–6/27）；週日為一週開始
+  const rngStart=new Date(tpl.dateMin.getFullYear(),tpl.dateMin.getMonth(),tpl.dateMin.getDate());
+  const rngEnd  =new Date(tpl.dateMax.getFullYear(),tpl.dateMax.getMonth(),tpl.dateMax.getDate());
+  const startWk=rngStart.getDay();
   let html=['日','一','二','三','四','五','六'].map((w,i)=>`<div class="head${i===0?' sun':i===6?' sat':''}">${w}</div>`).join('');
   for(let i=0;i<startWk;i++) html+=`<div class="day empty"></div>`;
-  for(let d=1;d<=lastDate;d++){
-    const dt=new Date(y,mm-1,d);
-    const k=`${p}|${ymdDash(dt)}`;
+  for(let dt=new Date(rngStart); dt<=rngEnd; dt.setDate(dt.getDate()+1)){
+    const cur=new Date(dt);
+    const k=`${p}|${ymdDash(cur)}`;
     if(!editState[k]){
-      const wd=dt.getDay();
+      const wd=cur.getDay();
       if(wd===1||wd===2){
         editState[k]={status:'OFF',start:'',end:'',storeId:defaultStore,remark:''};
       }else{
@@ -945,7 +955,7 @@ function renderCalendar(){
     const showTime = NEEDS_TIME.has(st.status);
     const showRemark = st.status !== 'All day in store';
     html+=`<div class="day s-${cls}" data-key="${k}">
-      <div class="date">${d} (${wkCh[dt.getDay()]})</div>
+      <div class="date">${cur.getMonth()+1}/${cur.getDate()} (${wkCh[cur.getDay()]})</div>
       <select data-act="status">${STATUS_OPTIONS.map(o=>{
         const lbl=o.v==='\uF8FF'?'(Apple Holiday)':o.v;
         return `<option value="${o.v}" ${o.v===st.status?'selected':''}>${lbl}</option>`}).join('')}</select>
@@ -998,13 +1008,12 @@ function statusClass(s){
 }
 
 $('t2Person').addEventListener('change',()=>{loadExistingIntoState();renderCalendar()});
-$('t2Month').addEventListener('change',()=>{loadExistingIntoState();renderCalendar()});
 $('t2BulkStore').addEventListener('change',e=>{
   const sid=e.target.value;
   if(!sid){return}
-  const p=$('t2Person').value,m=$('t2Month').value;
+  const p=$('t2Person').value;
   Object.keys(editState).forEach(k=>{
-    if(k.startsWith(`${p}|${m}-`)){
+    if(k.startsWith(`${p}|`)){
       editState[k].storeId=sid;
     }
   });
@@ -1012,13 +1021,13 @@ $('t2BulkStore').addEventListener('change',e=>{
   e.target.value=''; // reset 回提示文字
 });
 $('t2BulkInStore').addEventListener('click',()=>{
-  const p=$('t2Person').value,m=$('t2Month').value;
+  const p=$('t2Person').value;
   const tm=defaultTime(p);
   const storeFreq={};
   tpl.rows.filter(r=>r.name===p && r.l).forEach(r=>{storeFreq[r.l]=(storeFreq[r.l]||0)+1});
   const defaultStore=Object.keys(storeFreq).sort((a,b)=>storeFreq[b]-storeFreq[a])[0]||'';
   Object.keys(editState).forEach(k=>{
-    if(k.startsWith(`${p}|${m}-`)){
+    if(k.startsWith(`${p}|`)){
       const dt=new Date(k.split('|')[1]);
       const wd=dt.getDay();
       if(wd===1||wd===2){
@@ -1037,7 +1046,7 @@ $('t2ResetTpl').addEventListener('click',()=>{
   tpl=null;editState={};
   $('t2DropSec').hidden=false;$('t2EditSec').hidden=true;
   $('t2Export').hidden=true;$('t2ExportICS').hidden=true;$('t2ResetTpl').hidden=true;
-  $('t2info').textContent='選人 → 選月份 → 點每天的狀態 → 產出單人 Excel';
+  $('t2info').textContent='選人 → 點每天的狀態 → 產出單人 Excel';
 });
 
 /* ========== 產出休假 .ics（當頁當人 + 該月） ========== */
@@ -1050,12 +1059,12 @@ const ICS_SKIP = new Set(['OFF',
   'AM - in store, PM - Meeting/Training',
   'All day Meeting/Training']);
 $('t2ExportICS').addEventListener('click',()=>{
-  const p=$('t2Person').value, m=$('t2Month').value;
-  if(!p||!m) return;
+  const p=$('t2Person').value;
+  if(!p) return;
   const first = NAME_ALIAS[p] || p.split(/\s+/)[0];
   const events = [];
   Object.keys(editState).forEach(k=>{
-    if(!k.startsWith(`${p}|${m}-`)) return;
+    if(!k.startsWith(`${p}|`)) return;
     const st = editState[k];
     if(!st || ICS_SKIP.has(st.status) || !st.status) return;
     const dateStr = k.split('|')[1];
@@ -1070,7 +1079,7 @@ $('t2ExportICS').addEventListener('click',()=>{
     events.push({date:dt, status:st.status});
   });
   if(events.length===0){
-    alert('該月沒有可匯出的休假/節日事件。');
+    alert('沒有可匯出的休假/節日事件。');
     return;
   }
   events.sort((a,b)=>a.date-b.date);
@@ -1088,12 +1097,13 @@ $('t2ExportICS').addEventListener('click',()=>{
   L.push('END:VCALENDAR');
   const blob=new Blob([L.join('\r\n')],{type:'text/calendar;charset=utf-8'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);
-  a.download=`${first}-${m}-leave.ics`;a.click();
+  const fnStamp=`${pad(tpl.dateMin.getMonth()+1)}${pad(tpl.dateMin.getDate())}-${pad(tpl.dateMax.getMonth()+1)}${pad(tpl.dateMax.getDate())}`;
+  a.download=`${first}-${fnStamp}-leave.ics`;a.click();
 });
 
 /* ========== 產出 Excel（單人，使用 ExcelJS 完整保留原檔格式/公式/底色） ========== */
 $('t2Export').addEventListener('click', async ()=>{
-  const p=$('t2Person').value, m=$('t2Month').value;
+  const p=$('t2Person').value;
   if(!p||!tpl) return;
   const btn=$('t2Export'); const oldTxt=btn.textContent;
   btn.disabled=true; btn.textContent='⏳ 產出中…';
@@ -1107,14 +1117,13 @@ $('t2Export').addEventListener('click', async ()=>{
     const colDate = tpl.col.date + 1;
     const colL = 12, colM = 13, colN = 14, colO = 15, colQ = 17, colR_ = 18, colT = 20, colW = 23;
 
-    // 該月起訖
-    const [yy,mm] = m.split('-').map(Number);
-    const monthStart = new Date(yy, mm-1, 1);
-    const monthEnd   = new Date(yy, mm, 1);
+    // 整段範圍起訖（檔名對應整段班表，例 5/31–6/27）；含上下界
+    const monthStart = new Date(tpl.dateMin.getFullYear(), tpl.dateMin.getMonth(), tpl.dateMin.getDate());
+    const monthEnd   = new Date(tpl.dateMax.getFullYear(), tpl.dateMax.getMonth(), tpl.dateMax.getDate()+1);
 
     let modifiedCount = 0;
-    let firstRow = null;  // 該人該月第一列，給開檔時自動捲到
-    const weekSet = new Set();  // 收集該人該月的週次 (WK10..WK13) 給檔名
+    let firstRow = null;  // 該人第一列，給開檔時自動捲到
+    const weekSet = new Set();  // 收集該人的週次 (WK10..WK13) 給檔名
     const colWeek = 9;          // I 欄 = Week
     const colYear = 7;          // G 欄 = Year
     const colQuarter = 8;       // H 欄 = Quarter
@@ -1174,7 +1183,7 @@ $('t2Export').addEventListener('click', async ()=>{
     });
 
     if(modifiedCount === 0){
-      alert('該月沒有對應的列被修改，請確認範本是否包含此月份。');
+      alert('沒有對應的列被修改，請確認範本是否包含此範圍的日期。');
       return;
     }
 
