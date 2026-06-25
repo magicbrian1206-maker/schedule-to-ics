@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>排班工具箱 v2026.06.13.1400</title>
+<title>排班工具箱 v2026.06.13.1430</title>
 <meta name="description" content="排班 Excel ↔ 行事曆/個人班表產生器，純前端，資料不離開瀏覽器。" />
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
@@ -55,6 +55,12 @@
   .pcard .row.long{background:#3a1a1f;border-radius:4px;padding:2px 4px;margin:1px -4px}
   .pcard .row.long span:first-child{color:#ff6b6b;font-weight:600}
   .toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+  .weekbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+  .weekbar .wklabel{font-size:12px;color:var(--mute);margin-right:2px}
+  .weekbar .wkchip{font-size:13px;font-weight:600;padding:5px 13px;border-radius:999px;cursor:pointer;
+    background:#0f1216;border:1px solid var(--bd);color:#9aa0a6;user-select:none;transition:all .12s}
+  .weekbar .wkchip:hover{border-color:#3d6fff}
+  .weekbar .wkchip.on{background:#1d4ed8;border-color:#3d6fff;color:#fff}
   footer{text-align:center;color:var(--mute);font-size:12px;padding:24px 16px}
   footer a{color:var(--mute)}
   /* 個人班表 grid */
@@ -76,7 +82,7 @@
 </style>
 <script>
 /* ===== 版本自動更新偵測(一勞永逸,解決 Safari 死咬舊快取) ===== */
-window.__APP_VERSION__='2026.06.13.1400';
+window.__APP_VERSION__='2026.06.13.1430';
 (function(){
   // 用 sessionStorage 避免無限重載:每個分頁只自動清一次
   try{
@@ -106,7 +112,7 @@ window.__APP_VERSION__='2026.06.13.1400';
 <section id="t1" class="tabpanel">
 <header>
   <div>
-    <h1>📊 班表整合系統 <span style="font-size:12px;color:#888;font-weight:normal">v2026.06.13.1400</span></h1>
+    <h1>📊 班表整合系統 <span style="font-size:12px;color:#888;font-weight:normal">v2026.06.13.1430</span></h1>
     <div class="sub" id="fileinfo">拖入多份 ASC 班表 → 預覽休假 + 產出整合版 Excel</div>
   </div>
   <div style="display:flex;gap:8px">
@@ -140,7 +146,7 @@ window.__APP_VERSION__='2026.06.13.1400';
 <section id="t2" class="tabpanel show">
 <header>
   <div>
-    <h1>📝 個人班表產生器 <span style="font-size:12px;color:#888;font-weight:normal">v2026.06.13.1400</span></h1>
+    <h1>📝 個人班表產生器 <span style="font-size:12px;color:#888;font-weight:normal">v2026.06.13.1430</span></h1>
     <div class="sub" id="t2info">選人 → 點每天的狀態 → 產出單人 Excel</div>
   </div>
   <div style="display:flex;gap:8px">
@@ -168,6 +174,7 @@ window.__APP_VERSION__='2026.06.13.1400';
         <div style="flex:1"></div>
         <span class="sub" id="t2TplInfo"></span>
       </div>
+      <div class="weekbar" id="t2WeekBar"></div>
       <div class="cal" id="t2Cal"></div>
       <div class="legend">
         <span class="pill WORK">In Store</span> 上班 ·
@@ -233,16 +240,17 @@ let loadedFiles = [];     // [{name, buffer, sheet, col, eventsCount}]
 function detectColumns(aoa){
   for(let r=0;r<Math.min(5,aoa.length);r++){
     const row=aoa[r]||[];
-    const idx={name:-1,date:-1,status:-1};
+    const idx={name:-1,date:-1,status:-1,week:-1};
     row.forEach((v,i)=>{
       const s=String(v||'').toLowerCase().trim();
       if(idx.name<0 && (s==='eng name'||s==='name'||s==='姓名'||s==='員工'||s==='人員')) idx.name=i;
       if(idx.date<0 && (s==='date'||s==='日期')) idx.date=i;
       if(idx.status<0 && (s==='status'||s==='假別'||s==='狀態'||s==='請假')) idx.status=i;
+      if(idx.week<0 && (s==='week'||s==='週次'||s==='周次')) idx.week=i;
     });
-    if(idx.name>=0&&idx.date>=0&&idx.status>=0) return {...idx,headerRow:r};
+    if(idx.name>=0&&idx.date>=0&&idx.status>=0){ if(idx.week<0)idx.week=8; return {...idx,headerRow:r}; }
   }
-  return {name:4,date:9,status:13,headerRow:1};
+  return {name:4,date:9,status:13,week:8,headerRow:1};
 }
 
 // 單一檔解析：回傳 {events, workRows, sheet, col, buffer}
@@ -743,11 +751,32 @@ const NEEDS_TIME = new Set(['All day in store','AM - Meeting/Training, PM - in s
 let tpl = null; // { workbookBuffer, sheetName, headerRow, colMap, rows, people, months, stores, dateMin, dateMax }
 let editState = {}; // key=`${person}|${YYYY-MM-DD}` => {status, start:'12:00', end:'21:00', storeId:''}
 
-// 由範本所有資料列算出實際日期範圍（檔名對應的整段班表，例如 5/31–6/27）
+// 由「選取週次」的資料列算出日期範圍 + 有效日期集合（單一真實來源）
 function dateRange(rows){
   const ts=rows.map(r=>r.date.getTime());
   if(!ts.length) return {dateMin:null,dateMax:null};
   return {dateMin:new Date(Math.min(...ts)), dateMax:new Date(Math.max(...ts))};
+}
+// 從 "WK10" / "Week 10" / 10 取出週次數字
+function parseWeekNum(v){
+  if(v==null) return null;
+  const m=String(v).match(/(\d+)/);
+  return m?parseInt(m[1],10):null;
+}
+// 從檔名解析週次範圍，例 "FY26Q3 W10-W13" → [10,11,12,13]；"… W5" → [5]
+function parseFilenameWeeks(name){
+  if(!name) return null;
+  let m=name.match(/W(\d+)\s*[-~–—]\s*W?(\d+)/i);
+  if(m){const a=+m[1],b=+m[2],lo=Math.min(a,b),hi=Math.max(a,b),arr=[];for(let w=lo;w<=hi;w++)arr.push(w);return arr;}
+  m=name.match(/W(\d+)/i);
+  return m?[+m[1]]:null;
+}
+// 依目前 tpl.selectedWeeks 重算日期範圍與有效日期集合
+function recomputeRange(){
+  if(!tpl) return;
+  const sel=tpl.rows.filter(r=>tpl.selectedWeeks.has(r.week));
+  tpl.selectedDateSet=new Set(sel.map(r=>ymdDash(r.date)));
+  Object.assign(tpl, dateRange(sel));
 }
 // 範圍中文標籤，例 "5/31 – 6/27"
 function rangeLabel(){
@@ -816,11 +845,17 @@ async function loadTemplate(file){
       if(!name||!date) continue;
       // BOD/分/EOD/分 在 ASC 模板固定為 O/Q/R/T (idx 14,16,17,19)
       rows.push({rowIdx:i,name:String(name).trim(),date,
+        week:parseWeekNum(r[pickCol.week]),
         status:r[pickCol.status]||'',
         o:r[14], q:r[16], rh:r[17], t:r[19], l:r[11]});
     }
     const people=[...new Set(rows.map(r=>r.name))].sort();
     const months=[...new Set(rows.map(r=>`${r.date.getFullYear()}-${pad(r.date.getMonth()+1)}`))].sort();
+    // 檔案實際存在的週次（升冪）
+    const weeks=[...new Set(rows.map(r=>r.week).filter(w=>w!=null))].sort((a,b)=>a-b);
+    // 預設勾選：用檔名解析；解析不到就全選
+    const fnWeeks=parseFilenameWeeks(file.name);
+    const selectedWeeks=new Set((fnWeeks&&fnWeeks.filter(w=>weeks.includes(w)).length?fnWeeks.filter(w=>weeks.includes(w)):weeks));
     // 抓店清單：從「店面ID和名称查询」sheet
     const stores = extractStores(wb);
     // 存到 LocalStorage
@@ -830,7 +865,8 @@ async function loadTemplate(file){
       col:pickCol, fileName:file.name, savedAt:Date.now()
     }));
     tpl={buffer:buf, sheet:pickSheet, headerRow:pickCol.headerRow, col:pickCol,
-         rows, people, months, stores, fileName:file.name, ...dateRange(rows)};
+         rows, people, months, weeks, selectedWeeks, stores, fileName:file.name};
+    recomputeRange();
     enterEditor();
   }catch(err){
     console.error(err);
@@ -863,12 +899,17 @@ async function loadTemplateFromStorage(){
       const name=r[col.name],date=excelDate(r[col.date]);
       if(!name||!date) continue;
       rows.push({rowIdx:i,name:String(name).trim(),date,
+        week:parseWeekNum(r[col.week!=null?col.week:8]),
         status:r[col.status]||'',o:r[14],q:r[16],rh:r[17],t:r[19],l:r[11],remark:r[22]||''});
     }
     const people=[...new Set(rows.map(r=>r.name))].sort();
     const months=[...new Set(rows.map(r=>`${r.date.getFullYear()}-${pad(r.date.getMonth()+1)}`))].sort();
+    const weeks=[...new Set(rows.map(r=>r.week).filter(w=>w!=null))].sort((a,b)=>a-b);
+    const fnWeeks=parseFilenameWeeks(meta.fileName);
+    const selectedWeeks=new Set((fnWeeks&&fnWeeks.filter(w=>weeks.includes(w)).length?fnWeeks.filter(w=>weeks.includes(w)):weeks));
     const stores=extractStores(wb);
-    tpl={buffer:buf,sheet:meta.sheet,headerRow:col.headerRow,col,rows,people,months,stores,fileName:meta.fileName,...dateRange(rows)};
+    tpl={buffer:buf,sheet:meta.sheet,headerRow:col.headerRow,col,rows,people,months,weeks,selectedWeeks,stores,fileName:meta.fileName};
+    recomputeRange();
     return true;
   }catch(e){console.error(e);localStorage.removeItem(TPL_KEY);return false}
 }
@@ -891,6 +932,7 @@ function enterEditor(){
     return `<option value="${p}">${first}（${p}）</option>`;
   }).join('');
   $('t2Range').textContent=`📅 ${rangeLabel()}`;
+  renderWeekBar();
   // 填店號 bulk 選單
   $('t2BulkStore').innerHTML='<option value="">— 一鍵套用全部店號 —</option>'+
     tpl.stores.map(s=>`<option value="${s.id}">${s.id} ${s.name}</option>`).join('');
@@ -906,7 +948,7 @@ function loadExistingIntoState(){
   const storeFreq={};
   tpl.rows.filter(r=>r.name===p && r.l).forEach(r=>{storeFreq[r.l]=(storeFreq[r.l]||0)+1});
   const defaultStore=Object.keys(storeFreq).sort((a,b)=>storeFreq[b]-storeFreq[a])[0]||'';
-  tpl.rows.filter(r=>r.name===p)
+  tpl.rows.filter(r=>r.name===p && tpl.selectedWeeks.has(r.week))
     .forEach(r=>{
       const k=`${p}|${ymdDash(r.date)}`;
       const wd=r.date.getDay();
@@ -925,6 +967,13 @@ function loadExistingIntoState(){
     });
 }
 
+function renderWeekBar(){
+  const bar=$('t2WeekBar');
+  if(!tpl||!tpl.weeks||tpl.weeks.length<=1){ bar.innerHTML=''; return; }
+  bar.innerHTML='<span class="wklabel">週次：</span>'+
+    tpl.weeks.map(w=>`<span class="wkchip ${tpl.selectedWeeks.has(w)?'on':''}" data-wk="${w}">W${w}</span>`).join('');
+}
+
 function renderCalendar(){
   const p=$('t2Person').value;
   if(!p||!tpl||!tpl.dateMin){$('t2Cal').innerHTML='';return}
@@ -940,7 +989,13 @@ function renderCalendar(){
   for(let i=0;i<startWk;i++) html+=`<div class="day empty"></div>`;
   for(let dt=new Date(rngStart); dt<=rngEnd; dt.setDate(dt.getDate()+1)){
     const cur=new Date(dt);
-    const k=`${p}|${ymdDash(cur)}`;
+    const ymdK=ymdDash(cur);
+    // 非選取週次的日期（不連續選取時的空檔）→ 空白格保持星期對齊
+    if(tpl.selectedDateSet && !tpl.selectedDateSet.has(ymdK)){
+      html+=`<div class="day empty"></div>`;
+      continue;
+    }
+    const k=`${p}|${ymdK}`;
     if(!editState[k]){
       const wd=cur.getDay();
       if(wd===1||wd===2){
@@ -1008,12 +1063,28 @@ function statusClass(s){
 }
 
 $('t2Person').addEventListener('change',()=>{loadExistingIntoState();renderCalendar()});
+$('t2WeekBar').addEventListener('click',e=>{
+  const chip=e.target.closest('.wkchip');
+  if(!chip) return;
+  const w=parseInt(chip.dataset.wk,10);
+  if(tpl.selectedWeeks.has(w)){
+    if(tpl.selectedWeeks.size<=1){ alert('至少要保留一個週次'); return; }
+    tpl.selectedWeeks.delete(w);
+  }else{
+    tpl.selectedWeeks.add(w);
+  }
+  recomputeRange();
+  $('t2Range').textContent=`📅 ${rangeLabel()}`;
+  renderWeekBar();
+  loadExistingIntoState();
+  renderCalendar();
+});
 $('t2BulkStore').addEventListener('change',e=>{
   const sid=e.target.value;
   if(!sid){return}
   const p=$('t2Person').value;
   Object.keys(editState).forEach(k=>{
-    if(k.startsWith(`${p}|`)){
+    if(k.startsWith(`${p}|`) && tpl.selectedDateSet.has(k.split('|')[1])){
       editState[k].storeId=sid;
     }
   });
@@ -1027,7 +1098,7 @@ $('t2BulkInStore').addEventListener('click',()=>{
   tpl.rows.filter(r=>r.name===p && r.l).forEach(r=>{storeFreq[r.l]=(storeFreq[r.l]||0)+1});
   const defaultStore=Object.keys(storeFreq).sort((a,b)=>storeFreq[b]-storeFreq[a])[0]||'';
   Object.keys(editState).forEach(k=>{
-    if(k.startsWith(`${p}|`)){
+    if(k.startsWith(`${p}|`) && tpl.selectedDateSet.has(k.split('|')[1])){
       const dt=new Date(k.split('|')[1]);
       const wd=dt.getDay();
       if(wd===1||wd===2){
@@ -1065,9 +1136,10 @@ $('t2ExportICS').addEventListener('click',()=>{
   const events = [];
   Object.keys(editState).forEach(k=>{
     if(!k.startsWith(`${p}|`)) return;
+    const dateStr = k.split('|')[1];
+    if(tpl.selectedDateSet && !tpl.selectedDateSet.has(dateStr)) return;
     const st = editState[k];
     if(!st || ICS_SKIP.has(st.status) || !st.status) return;
-    const dateStr = k.split('|')[1];
     const dt = new Date(dateStr);
     const wd = dt.getDay(); // 0=日, 1=一, 2=二
     // All day in store：只有週一/二（原本預設 OFF 卻改成上班）才匯出 → 顯示「上班」
@@ -1117,10 +1189,6 @@ $('t2Export').addEventListener('click', async ()=>{
     const colDate = tpl.col.date + 1;
     const colL = 12, colM = 13, colN = 14, colO = 15, colQ = 17, colR_ = 18, colT = 20, colW = 23;
 
-    // 整段範圍起訖（檔名對應整段班表，例 5/31–6/27）；含上下界
-    const monthStart = new Date(tpl.dateMin.getFullYear(), tpl.dateMin.getMonth(), tpl.dateMin.getDate());
-    const monthEnd   = new Date(tpl.dateMax.getFullYear(), tpl.dateMax.getMonth(), tpl.dateMax.getDate()+1);
-
     let modifiedCount = 0;
     let firstRow = null;  // 該人第一列，給開檔時自動捲到
     const weekSet = new Set();  // 收集該人的週次 (WK10..WK13) 給檔名
@@ -1140,7 +1208,7 @@ $('t2Export').addEventListener('click', async ()=>{
       else if(typeof dv === 'number') date = new Date(Math.round((dv-25569)*86400*1000));
       else if(dv && dv.result instanceof Date) date = dv.result;
       if(!date) return;
-      if(date < monthStart || date >= monthEnd) return;
+      if(tpl.selectedDateSet && !tpl.selectedDateSet.has(ymdDash(date))) return;
 
       const key = `${p}|${ymdDash(date)}`;
       const st = editState[key];
@@ -1202,7 +1270,7 @@ $('t2Export').addEventListener('click', async ()=>{
         if(dv instanceof Date) date=dv;
         else if(typeof dv==='number') date=new Date(Math.round((dv-25569)*86400*1000));
         else if(dv && dv.result instanceof Date) date=dv.result;
-        if(date && date>=monthStart && date<monthEnd) keep = true;
+        if(date && tpl.selectedDateSet && tpl.selectedDateSet.has(ymdDash(date))) keep = true;
       }
       row.hidden = !keep;   // 非該人該月 → 隱藏（非刪除）
       if(!keep){
