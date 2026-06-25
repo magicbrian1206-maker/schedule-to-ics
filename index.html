@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>排班工具箱 v2026.06.13.1500</title>
+<title>排班工具箱 v2026.06.13.1530</title>
 <meta name="description" content="排班 Excel ↔ 行事曆/個人班表產生器，純前端，資料不離開瀏覽器。" />
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
@@ -82,7 +82,7 @@
 </style>
 <script>
 /* ===== 版本自動更新偵測(一勞永逸,解決 Safari 死咬舊快取) ===== */
-window.__APP_VERSION__='2026.06.13.1500';
+window.__APP_VERSION__='2026.06.13.1530';
 (function(){
   // 用 sessionStorage 避免無限重載:每個分頁只自動清一次
   try{
@@ -112,7 +112,7 @@ window.__APP_VERSION__='2026.06.13.1500';
 <section id="t1" class="tabpanel">
 <header>
   <div>
-    <h1>📊 班表整合系統 <span style="font-size:12px;color:#888;font-weight:normal">v2026.06.13.1500</span></h1>
+    <h1>📊 班表整合系統 <span style="font-size:12px;color:#888;font-weight:normal">v2026.06.13.1530</span></h1>
     <div class="sub" id="fileinfo">拖入多份 ASC 班表 → 預覽休假 + 產出整合版 Excel</div>
   </div>
   <div style="display:flex;gap:8px">
@@ -146,7 +146,7 @@ window.__APP_VERSION__='2026.06.13.1500';
 <section id="t2" class="tabpanel show">
 <header>
   <div>
-    <h1>📝 個人班表產生器 <span style="font-size:12px;color:#888;font-weight:normal">v2026.06.13.1500</span></h1>
+    <h1>📝 個人班表產生器 <span style="font-size:12px;color:#888;font-weight:normal">v2026.06.13.1530</span></h1>
     <div class="sub" id="t2info">選人 → 點每天的狀態 → 產出單人 Excel</div>
   </div>
   <div style="display:flex;gap:8px">
@@ -170,7 +170,7 @@ window.__APP_VERSION__='2026.06.13.1500';
         <select id="t2Person" style="min-width:180px"></select>
         <span class="sub" id="t2Range" style="font-weight:600;color:#cfd3d8"></span>
         <button class="ghost" id="t2BulkInStore">回復預設狀態</button>
-        <select id="t2BulkStore" style="min-width:220px"><option value="">— 一鍵套用全部店號 —</option></select>
+        <select id="t2BulkStore" style="min-width:220px"><option value="">一鍵套用全月店號</option></select>
         <div style="flex:1"></div>
         <span class="sub" id="t2TplInfo"></span>
       </div>
@@ -601,6 +601,7 @@ $('dl').addEventListener('click', async ()=>{
       ws.getRow(r).hidden = empty;   // L 沒資料 → 隱藏(非刪除)
       if(empty){ clearOrphanCols.forEach(c=>{ ws.getRow(r).getCell(c).value = null; }); }
       if(!empty){
+        ws.getRow(r).getCell(colL_idx).font = { name:'Kaiti SC Regular', family:1, size:9 }; // L欄統一字體
         ws.getRow(r).getCell(colL_idx).alignment = { horizontal:'center', vertical:'middle' }; // L欄統一置中
         const wv=ws.getRow(r).getCell(colWeek_).value; if(wv) fnWeeks.add(String(wv).trim());
         if(fnYear===null){ const yv=ws.getRow(r).getCell(colYear_).value; if(yv) fnYear=parseInt(String(yv).replace(/\D/g,''),10); }
@@ -934,7 +935,7 @@ function enterEditor(){
   $('t2Range').textContent=`📅 ${rangeLabel()}`;
   renderWeekBar();
   // 填店號 bulk 選單
-  $('t2BulkStore').innerHTML='<option value="">— 一鍵套用全部店號 —</option>'+
+  $('t2BulkStore').innerHTML='<option value="">一鍵套用全月店號</option>'+
     tpl.stores.map(s=>`<option value="${s.id}">${s.id} ${s.name}</option>`).join('');
   // 載入該人該月既有資料當預設
   loadExistingIntoState();
@@ -1229,7 +1230,8 @@ $('t2Export').addEventListener('click', async ()=>{
       }else{
         row.getCell(colL).value = null;
       }
-      // L 欄統一置中(範本 L 欄夾雜「靠右/置中」兩種格式→不統一會位置跑掉)
+      // L 欄統一字體+置中(範本 L 欄夾雜「楷體9pt / 新細明體12pt」兩種→不統一字會大小不一)
+      row.getCell(colL).font = { name:'Kaiti SC Regular', family:1, size:9 };
       row.getCell(colL).alignment = { horizontal:'center', vertical:'middle' };
       // 工作類 → 寫時段；其他 → 清空
       if(NEEDS_TIME.has(st.status)){
