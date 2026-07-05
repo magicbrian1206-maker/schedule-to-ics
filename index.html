@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>排班工具箱 v2026.06.13.1545</title>
+<title>排班工具箱 v2026.07.05.1520</title>
 <meta name="description" content="排班 Excel ↔ 行事曆/個人班表產生器，純前端，資料不離開瀏覽器。" />
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
@@ -82,7 +82,7 @@
 </style>
 <script>
 /* ===== 版本自動更新偵測(一勞永逸,解決 Safari 死咬舊快取) ===== */
-window.__APP_VERSION__='2026.06.13.1545';
+window.__APP_VERSION__='2026.07.05.1520';
 (function(){
   // 用 sessionStorage 避免無限重載:每個分頁只自動清一次
   try{
@@ -112,7 +112,7 @@ window.__APP_VERSION__='2026.06.13.1545';
 <section id="t1" class="tabpanel">
 <header>
   <div>
-    <h1>📊 班表整合系統 <span style="font-size:12px;color:#888;font-weight:normal">v2026.06.13.1545</span></h1>
+    <h1>📊 班表整合系統 <span style="font-size:12px;color:#888;font-weight:normal">v2026.07.05.1520</span></h1>
     <div class="sub" id="fileinfo">拖入多份 ASC 班表 → 預覽休假 + 產出整合版 Excel</div>
   </div>
   <div style="display:flex;gap:8px">
@@ -146,7 +146,7 @@ window.__APP_VERSION__='2026.06.13.1545';
 <section id="t2" class="tabpanel show">
 <header>
   <div>
-    <h1>📝 個人班表產生器 <span style="font-size:12px;color:#888;font-weight:normal">v2026.06.13.1545</span></h1>
+    <h1>📝 個人班表產生器 <span style="font-size:12px;color:#888;font-weight:normal">v2026.07.05.1520</span></h1>
     <div class="sub" id="t2info">選人 → 點每天的狀態 → 產出單人 Excel</div>
   </div>
   <div style="display:flex;gap:8px">
@@ -256,13 +256,19 @@ function detectColumns(aoa){
 // 單一檔解析：回傳 {events, workRows, sheet, col, buffer}
 async function parseFile(file){
   const buf = await file.arrayBuffer();
-  const wb = XLSX.read(buf,{cellDates:true});
+  const wb = XLSX.read(buf,{cellDates:true,cellStyles:true});
   let best = {events:[],workRows:[],sheet:'',col:null};
   for(const sn of wb.SheetNames){
-    const aoa = XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:null,raw:true});
+    const ws = wb.Sheets[sn];
+    const aoa = XLSX.utils.sheet_to_json(ws,{header:1,defval:null,raw:true});
+    // 尊重 Excel 的隱藏/自動篩選：只收「打開檔案時看得到」的列，避免母表夾帶其他人
+    const hiddenRows = ws['!rows'] || [];
+    const startRow = ws['!ref'] ? XLSX.utils.decode_range(ws['!ref']).s.r : 0;
     const col = detectColumns(aoa);
     const ev=[],work=[];
     for(let i=col.headerRow+1;i<aoa.length;i++){
+      const meta = hiddenRows[startRow + i];
+      if(meta && meta.hidden) continue;
       const r=aoa[i]||[];
       const name=r[col.name],date=excelDate(r[col.date]),st=r[col.status];
       if(!name||!date||!st) continue;
