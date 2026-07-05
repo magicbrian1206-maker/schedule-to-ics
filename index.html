@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>排班工具箱 v2026.07.05.1520</title>
+<title>排班工具箱 v2026.07.05.1610</title>
 <meta name="description" content="排班 Excel ↔ 行事曆/個人班表產生器，純前端，資料不離開瀏覽器。" />
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
@@ -82,7 +82,7 @@
 </style>
 <script>
 /* ===== 版本自動更新偵測(一勞永逸,解決 Safari 死咬舊快取) ===== */
-window.__APP_VERSION__='2026.07.05.1520';
+window.__APP_VERSION__='2026.07.05.1610';
 (function(){
   // 用 sessionStorage 避免無限重載:每個分頁只自動清一次
   try{
@@ -112,7 +112,7 @@ window.__APP_VERSION__='2026.07.05.1520';
 <section id="t1" class="tabpanel">
 <header>
   <div>
-    <h1>📊 班表整合系統 <span style="font-size:12px;color:#888;font-weight:normal">v2026.07.05.1520</span></h1>
+    <h1>📊 班表整合系統 <span style="font-size:12px;color:#888;font-weight:normal">v2026.07.05.1610</span></h1>
     <div class="sub" id="fileinfo">拖入多份 ASC 班表 → 預覽休假 + 產出整合版 Excel</div>
   </div>
   <div style="display:flex;gap:8px">
@@ -146,7 +146,7 @@ window.__APP_VERSION__='2026.07.05.1520';
 <section id="t2" class="tabpanel show">
 <header>
   <div>
-    <h1>📝 個人班表產生器 <span style="font-size:12px;color:#888;font-weight:normal">v2026.07.05.1520</span></h1>
+    <h1>📝 個人班表產生器 <span style="font-size:12px;color:#888;font-weight:normal">v2026.07.05.1610</span></h1>
     <div class="sub" id="t2info">選人 → 點每天的狀態 → 產出單人 Excel</div>
   </div>
   <div style="display:flex;gap:8px">
@@ -463,9 +463,12 @@ $('dl').addEventListener('click', async ()=>{
     const stats = {files:loadedFiles.length, overwritten:0, skipped:0, addedPeople:new Set(), missPeople:new Set()};
 
     // 預先建底檔索引：cnName + ymd → ExcelJS row
+    // 尊重 Excel 隱藏/AutoFilter：底檔自己的隱藏列(其他人母表舊資料)也要跳過，
+    // 否則第一份檔當事人的可見編輯會被自己隱藏列的舊值蓋掉
     const baseIndex = new Map();
     ws.eachRow({includeEmpty:false},(row,rNum)=>{
       if(rNum<4) return;
+      if(row.hidden) return;
       const fv = row.getCell(colF).value;
       const cn = fv ? String(fv).trim() : '';
       if(!cn) return;
@@ -480,13 +483,19 @@ $('dl').addEventListener('click', async ()=>{
 
     for(let i=1; i<loadedFiles.length; i++){
       const src = loadedFiles[i];
-      const srcWb = XLSX.read(src.buffer,{cellDates:true});
-      const srcAoa = XLSX.utils.sheet_to_json(srcWb.Sheets[src.sheet],{header:1,defval:null,raw:true});
+      const srcWb = XLSX.read(src.buffer,{cellDates:true,cellStyles:true});
+      const srcWs = srcWb.Sheets[src.sheet];
+      const srcAoa = XLSX.utils.sheet_to_json(srcWs,{header:1,defval:null,raw:true});
       const sc = src.col;
+      // 尊重 Excel 隱藏/AutoFilter：只用「打開檔案看得到的列」，隱藏列(其他人母表舊資料)一律不參與，避免覆蓋別人
+      const srcHiddenRows = srcWs['!rows'] || [];
+      const srcStartRow = srcWs['!ref'] ? XLSX.utils.decode_range(srcWs['!ref']).s.r : 0;
+      const isSrcHidden = (r)=>{ const m = srcHiddenRows[srcStartRow + r]; return !!(m && m.hidden); };
 
-      // 先掃一遍：該檔哪些人「真的有編輯」(L 或 N 任一非空)
+      // 先掃一遍：該檔哪些人「真的有編輯」(L 或 N 任一非空)——只算可見列
       const editedCN = new Set();
       for(let r=sc.headerRow+1; r<srcAoa.length; r++){
+        if(isSrcHidden(r)) continue;
         const row=srcAoa[r]||[];
         const eng=row[sc.name], asc=row[5];
         if(!eng) continue;
@@ -496,6 +505,7 @@ $('dl').addEventListener('click', async ()=>{
       }
 
       for(let r=sc.headerRow+1; r<srcAoa.length; r++){
+        if(isSrcHidden(r)) continue;
         const row = srcAoa[r] || [];
         const engName = row[sc.name];
         const ascName = row[5]; // F 欄 (索引 5)
