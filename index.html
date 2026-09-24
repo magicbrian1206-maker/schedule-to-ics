@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>排班工具箱 v2026.07.05.1840</title>
+<title>排班工具箱 v2026.09.24.1210</title>
 <meta name="description" content="排班 Excel ↔ 行事曆/個人班表產生器，純前端，資料不離開瀏覽器。" />
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
@@ -82,7 +82,7 @@
 </style>
 <script>
 /* ===== 版本自動更新偵測(一勞永逸,解決 Safari 死咬舊快取) ===== */
-window.__APP_VERSION__='2026.07.05.1840';
+window.__APP_VERSION__='2026.09.24.1210';
 (function(){
   // 用 sessionStorage 避免無限重載:每個分頁只自動清一次
   try{
@@ -112,7 +112,7 @@ window.__APP_VERSION__='2026.07.05.1840';
 <section id="t1" class="tabpanel">
 <header>
   <div>
-    <h1>📊 班表整合系統 <span style="font-size:12px;color:#888;font-weight:normal">v2026.07.05.1840</span></h1>
+    <h1>📊 班表整合系統 <span style="font-size:12px;color:#888;font-weight:normal">v2026.09.24.1210</span></h1>
     <div class="sub" id="fileinfo">拖入多份 ASC 班表 → 預覽休假 + 產出整合版 Excel</div>
   </div>
   <div style="display:flex;gap:8px">
@@ -146,7 +146,7 @@ window.__APP_VERSION__='2026.07.05.1840';
 <section id="t2" class="tabpanel show">
 <header>
   <div>
-    <h1>📝 個人班表產生器 <span style="font-size:12px;color:#888;font-weight:normal">v2026.07.05.1840</span></h1>
+    <h1>📝 個人班表產生器 <span style="font-size:12px;color:#888;font-weight:normal">v2026.09.24.1210</span></h1>
     <div class="sub" id="t2info">選人 → 點每天的狀態 → 產出單人 Excel</div>
   </div>
   <div style="display:flex;gap:8px">
@@ -1031,7 +1031,7 @@ function renderCalendar(){
     const st=editState[k];
     const cls=statusClass(st.status);
     const showTime = NEEDS_TIME.has(st.status);
-    const showRemark = st.status !== 'All day in store';
+    const showRemark = true; // 所有班別（含 All day in store）都可打備註
     html+=`<div class="day s-${cls}" data-key="${k}">
       <div class="date">${cur.getMonth()+1}/${cur.getDate()} (${wkCh[cur.getDay()]})</div>
       <select data-act="status">${STATUS_OPTIONS.map(o=>{
@@ -1269,8 +1269,8 @@ $('t2Export').addEventListener('click', async ()=>{
         row.getCell(colR_).value = null;
         row.getCell(colT).value  = null;
       }
-      // W 欄(Remark)：只有非 All day in store 時寫備註
-      row.getCell(colW).value = (st.status !== 'All day in store' && st.remark) ? st.remark : null;
+      // W 欄(Remark)：任何班別都可寫備註（含 All day in store）
+      row.getCell(colW).value = st.remark ? st.remark : null;
       modifiedCount++;
     });
 
