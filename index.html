@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>排班工具箱 v2026.09.24.1235</title>
+<title>排班工具箱 v2026.09.24.1210</title>
 <meta name="description" content="排班 Excel ↔ 行事曆/個人班表產生器，純前端，資料不離開瀏覽器。" />
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
@@ -21,15 +21,15 @@
   .tabpanel{display:none}
   .tabpanel.show{display:block}
   body{margin:0;font:15px/1.55 -apple-system,"Noto Sans TC",sans-serif;background:var(--bg);color:#e8eaed}
-  header{padding:10px 24px;border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
-  h1{margin:0;font-size:17px}
+  header{padding:18px 28px;border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
+  h1{margin:0;font-size:19px}
   .sub{color:var(--mute);font-size:13px}
   .tabs{display:flex;gap:0;border-bottom:1px solid var(--bd);background:var(--card)}
-  .tab{padding:9px 18px;cursor:pointer;color:var(--mute);font-weight:600;font-size:14px;border-bottom:2px solid transparent;transition:.15s}
+  .tab{padding:14px 22px;cursor:pointer;color:var(--mute);font-weight:600;font-size:14px;border-bottom:2px solid transparent;transition:.15s}
   .tab:hover{color:#cfd3d8}
   .tab.on{color:#fff;border-bottom-color:var(--accent)}
-  main{max-width:1500px;margin:0 auto;padding:12px 16px;display:grid;gap:10px}
-  .card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px}
+  main{max-width:1200px;margin:0 auto;padding:24px 20px;display:grid;gap:18px}
+  .card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:18px}
   .drop{display:block;border:2px dashed #2c313a;border-radius:12px;padding:48px;text-align:center;cursor:pointer;transition:.15s}
   .drop:hover,.drop.hover{border-color:var(--accent);background:#0d1419}
   .drop .ico{font-size:42px}
@@ -54,40 +54,35 @@
   .pcard .row{font-size:12px;color:var(--mute);display:flex;justify-content:space-between;padding:2px 0}
   .pcard .row.long{background:#3a1a1f;border-radius:4px;padding:2px 4px;margin:1px -4px}
   .pcard .row.long span:first-child{color:#ff6b6b;font-weight:600}
-  .toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
-  .weekbar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+  .toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+  .weekbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
   .weekbar .wklabel{font-size:12px;color:var(--mute);margin-right:2px}
-  .weekbar .wkchip{font-size:12.5px;font-weight:600;padding:4px 11px;border-radius:999px;cursor:pointer;
+  .weekbar .wkchip{font-size:13px;font-weight:600;padding:5px 13px;border-radius:999px;cursor:pointer;
     background:#0f1216;border:1px solid var(--bd);color:#9aa0a6;user-select:none;transition:all .12s}
   .weekbar .wkchip:hover{border-color:#3d6fff}
   .weekbar .wkchip.on{background:#1d4ed8;border-color:#3d6fff;color:#fff}
-  footer{text-align:center;color:var(--mute);font-size:12px;padding:10px 16px}
+  footer{text-align:center;color:var(--mute);font-size:12px;padding:24px 16px}
   footer a{color:var(--mute)}
   /* 個人班表 grid */
-  .cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
-  .cal .head{text-align:center;font-size:12px;color:var(--mute);padding:2px 0;font-weight:600}
+  .cal{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+  .cal .head{text-align:center;font-size:12px;color:var(--mute);padding:6px 0;font-weight:600}
   .cal .head.sun{color:#ff6b6b}
   .cal .head.sat{color:#5b9dff}
-  .day{background:#1a1e25;border:1px solid var(--bd);border-radius:8px;padding:6px;min-height:0;font-size:12px;display:flex;flex-direction:column;gap:3px}
+  .day{background:#1a1e25;border:1px solid var(--bd);border-radius:8px;padding:8px;min-height:96px;font-size:12px;display:flex;flex-direction:column;gap:4px}
   .day.empty{background:transparent;border:1px dashed #2c313a}
-  .day .date{font-weight:600;color:#cfd3d8;font-size:12.5px;line-height:1.2}
-  .day select{width:100%;font-size:12px;padding:3px 5px}
-  .day .selrow{display:flex;gap:3px;align-items:center}
-  .day .selrow select[data-act="status"]{flex:1 1 52%;min-width:0}
-  .day .selrow select[data-act="store"]{flex:1 1 48%;min-width:0}
-  .day .botrow{display:flex;gap:3px;align-items:center}
-  .day .times{display:flex;gap:3px;align-items:center;font-size:11px;color:var(--mute);flex:0 0 auto}
-  .day .times input{font-size:11px;padding:2px 3px;width:100%}
-  .day input[data-act="remark"]{flex:1 1 auto;min-width:0;font-size:11px;padding:3px 5px;background:#0f1216;border:1px solid var(--bd);color:#e8eaed;border-radius:4px}
+  .day .date{font-weight:600;color:#cfd3d8;font-size:13px}
+  .day select{width:100%;font-size:12px;padding:4px 6px}
+  .day .times{display:flex;gap:3px;align-items:center;font-size:11px;color:var(--mute)}
+  .day .times input{font-size:11px;padding:3px 4px;width:100%}
   .day.s-leave{background:#3a1a1f}
   .day.s-ph{background:#1a3a23}
   .day.s-meet{background:#2d1b3a}
   .day.s-rph{background:#1f1d3a}
-  .legend{font-size:11.5px;color:var(--mute);margin-top:6px;line-height:1.5}
+  .legend{font-size:11.5px;color:var(--mute);margin-top:8px;line-height:1.7}
 </style>
 <script>
 /* ===== 版本自動更新偵測(一勞永逸,解決 Safari 死咬舊快取) ===== */
-window.__APP_VERSION__='2026.09.24.1235';
+window.__APP_VERSION__='2026.09.24.1210';
 (function(){
   // 用 sessionStorage 避免無限重載:每個分頁只自動清一次
   try{
@@ -117,7 +112,7 @@ window.__APP_VERSION__='2026.09.24.1235';
 <section id="t1" class="tabpanel">
 <header>
   <div>
-    <h1>📊 班表整合系統 <span style="font-size:12px;color:#888;font-weight:normal">v2026.09.24.1235</span></h1>
+    <h1>📊 班表整合系統 <span style="font-size:12px;color:#888;font-weight:normal">v2026.09.24.1210</span></h1>
     <div class="sub" id="fileinfo">拖入多份 ASC 班表 → 預覽休假 + 產出整合版 Excel</div>
   </div>
   <div style="display:flex;gap:8px">
@@ -151,7 +146,7 @@ window.__APP_VERSION__='2026.09.24.1235';
 <section id="t2" class="tabpanel show">
 <header>
   <div>
-    <h1>📝 個人班表產生器 <span style="font-size:12px;color:#888;font-weight:normal">v2026.09.24.1235</span></h1>
+    <h1>📝 個人班表產生器 <span style="font-size:12px;color:#888;font-weight:normal">v2026.09.24.1210</span></h1>
     <div class="sub" id="t2info">選人 → 點每天的狀態 → 產出單人 Excel</div>
   </div>
   <div style="display:flex;gap:8px">
@@ -1039,7 +1034,6 @@ function renderCalendar(){
     const showRemark = true; // 所有班別（含 All day in store）都可打備註
     html+=`<div class="day s-${cls}" data-key="${k}">
       <div class="date">${cur.getMonth()+1}/${cur.getDate()} (${wkCh[cur.getDay()]})</div>
-      <div class="selrow">
       <select data-act="status">${STATUS_OPTIONS.map(o=>{
         const lbl=o.v==='\uF8FF'?'(Apple Holiday)':o.v;
         return `<option value="${o.v}" ${o.v===st.status?'selected':''}>${lbl}</option>`}).join('')}</select>
@@ -1047,15 +1041,12 @@ function renderCalendar(){
         <option value="">(無店)</option>
         ${tpl.stores.map(s=>`<option value="${s.id}" ${String(st.storeId||'')===s.id?'selected':''}>${s.id} ${s.name}</option>`).join('')}
       </select>
-      </div>
-      <div class="botrow">
       ${showTime?`
       <div class="times">
         <input type="time" value="${st.start}" data-act="start">–
         <input type="time" value="${st.end}" data-act="end">
       </div>`:''}
-      ${showRemark?`<input type="text" placeholder="備註…" value="${(st.remark||'').replace(/"/g,'&quot;')}" data-act="remark" />`:''}
-      </div>
+      ${showRemark?`<input type="text" placeholder="備註…" value="${(st.remark||'').replace(/"/g,'&quot;')}" data-act="remark" style="width:100%;font-size:11px;margin-top:4px;padding:3px 5px;background:#0f1216;border:1px solid var(--bd);color:#e8eaed;border-radius:4px" />`:''}
     </div>`;
   }
   $('t2Cal').innerHTML=html;
