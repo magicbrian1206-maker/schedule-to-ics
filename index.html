@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<title>排班工具箱 v2026.09.24.1245</title>
+<title>排班工具箱 v2026.09.24.1305</title>
 <meta name="description" content="排班 Excel ↔ 行事曆/個人班表產生器，純前端，資料不離開瀏覽器。" />
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
@@ -28,7 +28,7 @@
   .tab{padding:9px 18px;cursor:pointer;color:var(--mute);font-weight:600;font-size:14px;border-bottom:2px solid transparent;transition:.15s}
   .tab:hover{color:#cfd3d8}
   .tab.on{color:#fff;border-bottom-color:var(--accent)}
-  main{max-width:1500px;margin:0 auto;padding:12px 16px;display:grid;gap:10px}
+  main{max-width:1200px;margin:0 auto;padding:12px 16px;display:grid;gap:10px}
   .card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px}
   .drop{display:block;border:2px dashed #2c313a;border-radius:12px;padding:48px;text-align:center;cursor:pointer;transition:.15s}
   .drop:hover,.drop.hover{border-color:var(--accent);background:#0d1419}
@@ -82,7 +82,7 @@
 </style>
 <script>
 /* ===== 版本自動更新偵測(一勞永逸,解決 Safari 死咬舊快取) ===== */
-window.__APP_VERSION__='2026.09.24.1245';
+window.__APP_VERSION__='2026.09.24.1305';
 (function(){
   // 用 sessionStorage 避免無限重載:每個分頁只自動清一次
   try{
@@ -112,7 +112,7 @@ window.__APP_VERSION__='2026.09.24.1245';
 <section id="t1" class="tabpanel">
 <header>
   <div>
-    <h1>📊 班表整合系統 <span style="font-size:12px;color:#888;font-weight:normal">v2026.09.24.1245</span></h1>
+    <h1>📊 班表整合系統 <span style="font-size:12px;color:#888;font-weight:normal">v2026.09.24.1305</span></h1>
     <div class="sub" id="fileinfo">拖入多份 ASC 班表 → 預覽休假 + 產出整合版 Excel</div>
   </div>
   <div style="display:flex;gap:8px">
@@ -146,7 +146,7 @@ window.__APP_VERSION__='2026.09.24.1245';
 <section id="t2" class="tabpanel show">
 <header>
   <div>
-    <h1>📝 個人班表產生器 <span style="font-size:12px;color:#888;font-weight:normal">v2026.09.24.1245</span></h1>
+    <h1>📝 個人班表產生器 <span style="font-size:12px;color:#888;font-weight:normal">v2026.09.24.1305</span></h1>
     <div class="sub" id="t2info">選人 → 點每天的狀態 → 產出單人 Excel</div>
   </div>
   <div style="display:flex;gap:8px">
@@ -794,6 +794,30 @@ function parseFilenameWeeks(name){
   m=name.match(/W(\d+)/i);
   return m?[+m[1]]:null;
 }
+// 依「日期 → 週次」多數決校正 Week 欄
+// 背景：ASC 母表偶有少數人的 Week 欄整體位移(例 FY27Q1 有 3 人的 WK1 對到別人的 WK10)，
+// 導致勾選 W1-W5 時日期範圍被離群者拉長、中間出現大片空白格。
+// 作法：同一個日期由所有人投票決定它真正屬於哪一週，少數服從多數後覆寫每列的 week。
+function canonicalizeWeeks(rows){
+  const tally={};                                  // ymd -> {week:票數}
+  rows.forEach(r=>{
+    if(r.week==null) return;
+    const d=ymdDash(r.date);
+    (tally[d]||(tally[d]={}))[r.week]=(tally[d][r.week]||0)+1;
+  });
+  const canon={};                                  // ymd -> 得票最高的 week
+  let fixed=0;
+  for(const d in tally){
+    const c=tally[d];
+    canon[d]=Object.keys(c).reduce((a,b)=>c[b]>c[a]?b:a);
+  }
+  rows.forEach(r=>{
+    const w=canon[ymdDash(r.date)];
+    if(w!=null && r.week!==+w){ r.week=+w; fixed++; }
+  });
+  if(fixed) console.log(`[canonicalizeWeeks] 校正 ${fixed} 列的 Week 欄（依日期多數決）`);
+  return rows;
+}
 // 依目前 tpl.selectedWeeks 重算日期範圍與有效日期集合
 function recomputeRange(){
   if(!tpl) return;
@@ -872,6 +896,7 @@ async function loadTemplate(file){
         status:r[pickCol.status]||'',
         o:r[14], q:r[16], rh:r[17], t:r[19], l:r[11]});
     }
+    canonicalizeWeeks(rows);   // ← 先校正 Week 欄，再統計週次（離群者不得污染範圍）
     const people=[...new Set(rows.map(r=>r.name))].sort();
     const months=[...new Set(rows.map(r=>`${r.date.getFullYear()}-${pad(r.date.getMonth()+1)}`))].sort();
     // 檔案實際存在的週次（升冪）
@@ -925,6 +950,7 @@ async function loadTemplateFromStorage(){
         week:parseWeekNum(r[col.week!=null?col.week:8]),
         status:r[col.status]||'',o:r[14],q:r[16],rh:r[17],t:r[19],l:r[11],remark:r[22]||''});
     }
+    canonicalizeWeeks(rows);   // ← 同上：LocalStorage 路徑也要校正（兩條獨立路徑）
     const people=[...new Set(rows.map(r=>r.name))].sort();
     const months=[...new Set(rows.map(r=>`${r.date.getFullYear()}-${pad(r.date.getMonth()+1)}`))].sort();
     const weeks=[...new Set(rows.map(r=>r.week).filter(w=>w!=null))].sort((a,b)=>a-b);
